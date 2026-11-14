@@ -1,0 +1,14 @@
+# Local Postgres for development. Start with: docker compose up -d
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: steelman
+      POSTGRES_PASSWORD: steelman-local-only
+      POSTGRES_DB: steelman
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
