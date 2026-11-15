@@ -134,3 +134,36 @@ All free OpenRouter models. They're set in `backend/app/config.py`, and env vars
   - About 4 minutes later the same debate was resumed: the AI's turn streamed, the user's closing was saved, and the judge returned PRO 32 – CON 23 with 0 of 19 quotes dropped.
   - The share link returned 200 with no id field, and a guessed slug returned 404.
   - The database held 6 turns and a scorecard, and `usage` showed 6 AI calls. That matches what was sent: 1 topic check, 4 AI-turn attempts (one failed) and 1 judge call.
+
+## Frontend: debate flow and showcase mode (16 Nov 2026, step 8)
+
+- **Stack:** Vite, React 19, TypeScript, react-router. Styling is plain CSS using the portfolio's tokens (Fraunces, IBM Plex, cobalt accent, light and dark by system setting). There is no UI library.
+- **Pages:**
+
+  | Path | What it shows |
+  |---|---|
+  | `/` | Start form and the list of recorded debates |
+  | `/debate/:id` | The live debate |
+  | `/d/:slug` | A shared debate, read-only |
+  | `/recorded/:key` | A recorded debate bundled with the site |
+
+- **Debate screen:**
+  - Each round is a row with For on the left and Against on the right, stacked on a phone.
+  - The AI's reply appears as it streams.
+  - After the last turn the judge runs automatically, behind a "deliberating, 30 to 45 seconds" notice.
+- **The debate moves forward from events, not from a React effect.** After a turn is saved, one function runs the AI's turn and then the judge.
+  - It stops at the first error and waits for "Try again", so a failing model can't loop and use up the day's AI calls.
+  - A ref allows only one AI request at a time.
+- **Reloading is safe:** the page loads its state from the server by debate id and carries on from there.
+- **Quote highlighting:** text the judge quoted is marked in the transcript by exact match, ignoring case. If the judge reworded a quote slightly, it's left unmarked rather than guessed at.
+- **Showcase mode:**
+  - Recorded debates are JSON files bundled into the site (`src/showcase/`), so they play with the backend off.
+  - If `/status` says live mode is resting, or the server can't be reached, the start button is disabled and a notice points to the recorded debates.
+  - There is one recorded debate so far (museums, exported from the real run on 16 Nov). The plan calls for three, so two more need recording when the free allowance permits.
+- **`FAKE_LLM=1`** (`backend/app/fake_llm.py`) swaps in a canned model for local development and browser tests, so UI work costs no AI calls. It's off unless that variable is set.
+- **Browser checks** (`frontend/e2e/`, Playwright driving the installed Chrome), run on 16 Nov:
+  - `debate.mjs`: 14 of 14 pass at 1280 px and 390 px. They cover the full debate, quote highlighting, the verdict, the read-only share page, reload keeping state, no horizontal scroll and no console errors.
+  - `offline.mjs`: 5 of 5 pass with the backend stopped.
+  - Screenshots are in `docs/screenshots/`.
+- **Known rough edge:** the judge's summary says "PRO" and "CON" while the screen says "For" and "Against".
+- **Not checked:** dark mode screenshots, and screen-reader behaviour beyond labels and live regions.

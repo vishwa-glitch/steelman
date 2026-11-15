@@ -13,6 +13,7 @@ browser continue it. The share slug is a separate random value and gives read-on
 """
 
 import json
+import os
 import secrets
 import uuid
 from collections.abc import Iterator
@@ -75,6 +76,10 @@ def get_db(factory: sessionmaker = Depends(get_session_factory)) -> Iterator[Ses
 
 @lru_cache
 def get_llm() -> LLMClient:
+    if os.environ.get("FAKE_LLM") == "1":  # local development and browser tests only
+        from app.fake_llm import FakeLLM
+
+        return FakeLLM()  # type: ignore[return-value]
     return LLMClient(get_settings())
 
 
