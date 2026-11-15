@@ -93,3 +93,44 @@ All free OpenRouter models. They're set in `backend/app/config.py`, and env vars
 - **Topic schema has one field, on purpose.** The first version had `allowed` plus `category`. For "Remote work is better for companies than office work" the model returned `{"allowed": true, "category": "sexual"}`, and the motion was wrongly blocked. Two fields can contradict each other. With a single `verdict` field, a live check gave: remote work allowed, "the ruling party deserves to win the next election" blocked, and an "ignore your instructions" motion blocked. That's three motions, so it shows the filter works, not how accurate it is.
 - **Live check:** `python -m app.play` ran a full debate (user PRO on remote work). The opponent answered the user's open-source and scheduled-mentoring points directly, and judge v0 returned a scorecard in 26 s with 0 quotes dropped.
 - **Seen in that run, not yet acted on:** the opponent cited Bell Labs' corridor and IBM's return to the office. Those are well-known examples, but nothing checks the AI's facts. The site should say so.
+
+## API, database and limits (16 Nov 2026, step 7)
+
+**Endpoints** (`app/api.py`):
+
+| Endpoint | What it does |
+|---|---|
+| `POST /debates` | Checks the per-visitor limit and the topic, then creates the debate |
+| `GET /debates/{id}` | Current state: turns, whose turn is next, scorecard |
+| `POST /debates/{id}/turns` | Saves the user's turn |
+| `POST /debates/{id}/ai-turn` | Streams the AI's reply (server-sent events), then saves it |
+| `POST /debates/{id}/judge` | Judges a finished debate once; repeat calls return the saved scorecard |
+| `GET /share/{slug}` | Read-only view of a judged debate |
+| `GET /status` | Whether live mode can run |
+
+- **Changed from the plan:** the plan had `POST /turns` both save the user's turn and stream the AI's reply. They're now two calls. If the AI call fails, the user's turn is already saved and the browser only retries the AI turn. This happened in the live check below.
+- **Who can do what:**
+  - The debate id is a random UUID that only the browser that started the debate knows. Anyone holding it can continue the debate. There are no accounts.
+  - The share slug is a separate random value (`secrets.token_urlsafe(16)`, 128 bits). It gives read-only access, works only after the debate is judged, and its response doesn't include the debate id.
+- **Database** (`app/db.py`, Postgres, migrations with Alembic):
+  - `debates` holds the motion, side, difficulty, turns, scorecard and judge details.
+  - `usage` holds one row per day with the count of AI calls.
+  - No personal data is stored. The visitor's IP is kept only as a salted SHA-256 hash, for the per-visitor limit.
+- **Limits** (`app/limits.py`):
+  - Global: `DAILY_AI_CALL_LIMIT`, default 12 while the evals take 35 of the account's 50 a day. It's counted in one atomic SQL statement, so two requests can't both take the last call. When it's reached the API returns 503 "live mode is resting".
+  - `/status` reports live mode as off when fewer than 5 calls remain, because a full debate needs about 5 and shouldn't be started if it can't finish.
+  - Per visitor: `DEBATES_PER_IP_PER_DAY`, default 3, then 429.
+  - A call is counted before it's made, so a failed call still counts. That over-counts slightly, which is the safe direction.
+- **Races handled:**
+  - The AI's turn is saved only if the debate hasn't moved on since the stream started (row lock plus a turn-count check). This covers two tabs or a double click.
+  - If two judge requests overlap, the first scorecard is kept.
+- **Client IP:** taken from the connection. `X-Forwarded-For` is trusted only when `TRUST_PROXY=1`, because anyone can forge that header. This must be set correctly at deploy (step 11), or every visitor will look like the proxy's IP and share one limit.
+- **Not handled yet:**
+  - If a stream is cut off midway, the browser gets an error event and nothing is saved, but the AI call was still counted.
+  - Old debates are never deleted.
+- **Live check (16 Nov, real models, `curl`):** user as CON on "Museums should be free to enter."
+  - The debate was created and the AI opened, streamed in 59 pieces.
+  - On the AI's third turn, Ling was rate-limited upstream. The API returned 503 "busy" and the debate stayed at 4 turns, with the AI still to speak.
+  - About 4 minutes later the same debate was resumed: the AI's turn streamed, the user's closing was saved, and the judge returned PRO 32 – CON 23 with 0 of 19 quotes dropped.
+  - The share link returned 200 with no id field, and a guessed slug returned 404.
+  - The database held 6 turns and a scorecard, and `usage` showed 6 AI calls. That matches what was sent: 1 topic check, 4 AI-turn attempts (one failed) and 1 judge call.

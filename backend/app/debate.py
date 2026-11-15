@@ -24,6 +24,10 @@ class DebateError(Exception):
     """An illegal move or invalid input. The message is safe to show to the user."""
 
 
+class TurnOrderError(DebateError):
+    """A move that is illegal right now: wrong speaker, or the debate is over."""
+
+
 class Debate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     motion: str
@@ -53,9 +57,9 @@ class Debate(BaseModel):
 
     def _add(self, expected: Literal["user", "ai"], text: str) -> Turn:
         if self.finished:
-            raise DebateError("The debate is over.")
+            raise TurnOrderError("The debate is over.")
         if self.whose_turn() != expected:
-            raise DebateError("It is not your turn." if expected == "user" else "It is not the AI's turn.")
+            raise TurnOrderError("It is not your turn." if expected == "user" else "It is not the AI's turn.")
         side, rnd = ORDER[len(self.turns)]
         turn = Turn(side=side, round=rnd, text=text)
         self.turns.append(turn)

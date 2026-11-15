@@ -5,6 +5,7 @@ Free models allow 50 requests a day per account, so retries are deliberately few
 
 import json
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -123,6 +124,55 @@ class LLMClient:
             attempts=attempts,
             usage=body.get("usage") or {},
         )
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 800,
+        reasoning: dict[str, Any] | None = None,
+    ) -> Iterator[str]:
+        """Yield the reply piece by piece. No retries: a retry mid-stream would repeat text already shown."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        if reasoning is not None:
+            payload["reasoning"] = reasoning
+        headers = {"Authorization": f"Bearer {self.settings.openrouter_api_key}", "X-Title": "Steelman"}
+        url = f"{self.settings.openrouter_base_url}/chat/completions"
+        got_text = False
+        try:
+            with self.http.stream("POST", url, json=payload, headers=headers) as res:
+                if res.status_code != 200:
+                    body = res.read().decode("utf8", "ignore")[:300]
+                    if res.status_code == 429:
+                        raise RateLimited(f"rate limited: {body}", _retry_after_seconds(res))
+                    raise LLMError(f"HTTP {res.status_code}: {body}")
+                for line in res.iter_lines():
+                    if not line.startswith("data: "):
+                        continue  # blank lines and ": keep-alive" comments
+                    data = line[len("data: ") :]
+                    if data.strip() == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    if "error" in chunk:
+                        raise LLMError(f"provider error: {str(chunk['error'])[:300]}")
+                    choices = chunk.get("choices") or []
+                    delta = (choices[0].get("delta") or {}).get("content") if choices else None
+                    if delta:
+                        got_text = True
+                        yield delta
+        except httpx.TimeoutException as e:
+            raise LLMError("timed out") from e
+        except httpx.HTTPError as e:
+            raise LLMError(f"network error: {e}") from e
+        if not got_text:
+            raise LLMError("model returned an empty message")
 
     def structured(
         self,

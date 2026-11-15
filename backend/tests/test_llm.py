@@ -24,6 +24,12 @@ SETTINGS = Settings(
     judge_model="judge",
     judge_backup_model="backup",
     request_timeout_s=5,
+    database_url="",
+    daily_ai_call_limit=12,
+    debates_per_ip_per_day=3,
+    ip_hash_salt="t",
+    cors_origins=(),
+    trust_proxy=False,
 )
 
 
@@ -148,3 +154,39 @@ def test_empty_answer_after_hitting_token_limit_says_so():
     with pytest.raises(OutOfTokens, match="reasoning tokens=2500"):
         client.structured(MSGS, "judge", Verdict)
     assert len(sent) == 1  # not "repaired": a repair would hit the same limit
+
+
+def sse(*lines: str, status: int = 200) -> httpx.Response:
+    return httpx.Response(status, content="\n".join(lines).encode(), headers={"content-type": "text/event-stream"})
+
+
+def test_chat_stream_yields_pieces_and_skips_comments():
+    client, sent, _ = make_client(
+        [
+            sse(
+                ": OPENROUTER PROCESSING",
+                'data: {"choices": [{"delta": {"content": "Hel"}}]}',
+                "",
+                'data: {"choices": [{"delta": {"reasoning": "hmm"}}]}',
+                'data: {"choices": [{"delta": {"content": "lo"}}]}',
+                "data: [DONE]",
+            )
+        ]
+    )
+    assert list(client.chat_stream(MSGS, "opp")) == ["Hel", "lo"]
+    assert sent[0]["stream"] is True
+
+
+def test_chat_stream_429_raises_rate_limited():
+    client, _, _ = make_client([sse("busy", status=429)])
+    with pytest.raises(RateLimited):
+        list(client.chat_stream(MSGS, "opp"))
+
+
+def test_chat_stream_error_event_and_empty_stream_raise():
+    client, _, _ = make_client([sse('data: {"error": {"code": 502}}')])
+    with pytest.raises(LLMError, match="provider error"):
+        list(client.chat_stream(MSGS, "opp"))
+    client, _, _ = make_client([sse("data: [DONE]")])
+    with pytest.raises(LLMError, match="empty"):
+        list(client.chat_stream(MSGS, "opp"))

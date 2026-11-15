@@ -28,6 +28,12 @@ class Settings:
     judge_model: str
     judge_backup_model: str
     request_timeout_s: float
+    database_url: str
+    daily_ai_call_limit: int
+    debates_per_ip_per_day: int
+    ip_hash_salt: str
+    cors_origins: tuple[str, ...]
+    trust_proxy: bool
 
 
 def load_settings() -> Settings:
@@ -43,4 +49,12 @@ def load_settings() -> Settings:
         judge_model=get("JUDGE_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
         judge_backup_model=get("JUDGE_BACKUP_MODEL", "baidu/ernie-5.5-flash-preview:free"),
         request_timeout_s=float(get("REQUEST_TIMEOUT_S", "90")),
+        database_url=get("DATABASE_URL", "postgresql+psycopg://steelman:steelman-local-only@localhost:5433/steelman"),
+        # The free cap is 50 requests a day for the whole account, shared with the evals (35 a day).
+        daily_ai_call_limit=int(get("DAILY_AI_CALL_LIMIT", "12")),
+        debates_per_ip_per_day=int(get("DEBATES_PER_IP_PER_DAY", "3")),
+        ip_hash_salt=get("IP_HASH_SALT", "local-dev-salt"),
+        cors_origins=tuple(o.strip() for o in get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()),
+        # Only behind a proxy we control: X-Forwarded-For can be forged by anyone otherwise.
+        trust_proxy=get("TRUST_PROXY", "0") == "1",
     )
