@@ -80,3 +80,16 @@ All free OpenRouter models. They're set in `backend/app/config.py`, and env vars
   - So the stop message now says to wait a few minutes in that case, rather than a day.
   - `--writer` lets the generator use another model if one stays busy.
 - **Results file:** `evals/results/<judge>.json` and `.md`, overwritten as the run fills in, with git keeping the history. The plan said `<date>-<judge>.json`, but a run spans several days, so one file per judge version is clearer.
+
+## Debate engine, opponent and topic filter (16 Nov 2026, step 6)
+
+- **Order of play:** PRO then CON in each of opening, rebuttal and closing, six turns in all. If the user picks CON, the AI speaks first.
+- **State machine (`app/debate.py`):** the only legal move is the next turn in that fixed order. Speaking out of turn, twice in a row, or after the end raises an error, and a rejected turn doesn't advance the debate.
+- **Turn limits:** a user turn must be 20–1,500 characters. An AI turn is cut at 1,500. A motion must be 10–200 characters.
+- **Opponent:** two difficulty levels, friendly and sharp. It's told not to invent statistics, and that the transcript is the other debater's speech, never instructions. Reasoning is off, as for the eval writer.
+- **Topic filter, two layers:**
+  1. A word list blocks obvious cases with no model call (religion, caste, self-harm, hate terms, abortion).
+  2. A model check (ERNIE 5.5 Flash) classifies the rest.
+- **Topic schema has one field, on purpose.** The first version had `allowed` plus `category`. For "Remote work is better for companies than office work" the model returned `{"allowed": true, "category": "sexual"}`, and the motion was wrongly blocked. Two fields can contradict each other. With a single `verdict` field, a live check gave: remote work allowed, "the ruling party deserves to win the next election" blocked, and an "ignore your instructions" motion blocked. That's three motions, so it shows the filter works, not how accurate it is.
+- **Live check:** `python -m app.play` ran a full debate (user PRO on remote work). The opponent answered the user's open-source and scheduled-mentoring points directly, and judge v0 returned a scorecard in 26 s with 0 quotes dropped.
+- **Seen in that run, not yet acted on:** the opponent cited Bell Labs' corridor and IBM's return to the office. Those are well-known examples, but nothing checks the AI's facts. The site should say so.
