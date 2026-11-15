@@ -122,3 +122,29 @@ def test_missing_key_is_reported():
     no_key = Settings(**{**SETTINGS.__dict__, "openrouter_api_key": ""})
     with pytest.raises(LLMError, match="OPENROUTER_API_KEY"):
         LLMClient(no_key, http=httpx.Client())
+
+
+def test_reasoning_setting_is_sent_when_given():
+    client, sent, _ = make_client([reply('{"winner": "A", "reason": "r"}')])
+    client.structured(MSGS, "judge", Verdict, reasoning={"effort": "low"})
+    assert sent[0]["reasoning"] == {"effort": "low"}
+
+
+def test_reasoning_setting_is_omitted_by_default():
+    client, sent, _ = make_client([reply("hi", "opp")])
+    client.chat(MSGS, "opp")
+    assert "reasoning" not in sent[0]
+
+
+def test_empty_answer_after_hitting_token_limit_says_so():
+    from app.llm import OutOfTokens
+
+    body = {
+        "model": "judge",
+        "choices": [{"finish_reason": "length", "message": {"content": "", "reasoning": "thinking..."}}],
+        "usage": {"completion_tokens_details": {"reasoning_tokens": 2500}},
+    }
+    client, sent, _ = make_client([httpx.Response(200, json=body)])
+    with pytest.raises(OutOfTokens, match="reasoning tokens=2500"):
+        client.structured(MSGS, "judge", Verdict)
+    assert len(sent) == 1  # not "repaired": a repair would hit the same limit

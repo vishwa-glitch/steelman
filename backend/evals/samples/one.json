@@ -1,0 +1,11 @@
+{
+  "motion": "Homework should be banned in primary schools.",
+  "turns": [
+    {"side": "pro", "round": "opening", "text": "Young children learn best through play, rest and time with family. A 2006 review by Harris Cooper found almost no link between homework and achievement for primary pupils, while the link was clear for older students. Homework at this age mostly measures how much help a child gets at home, which widens the gap between families."},
+    {"side": "con", "round": "opening", "text": "Homework builds habits. Children who practise reading and times tables at home get faster and more confident. Banning it removes a simple way for parents to see what their child is learning."},
+    {"side": "pro", "round": "rebuttal", "text": "My opponent says homework builds habits, but gives no evidence that those habits come from homework rather than from reading for fun, which needs no ban to survive. Parents can see learning through reading together and school reports, without nightly worksheets that cause stress."},
+    {"side": "con", "round": "rebuttal", "text": "Stress happens anyway. Some children like worksheets. A ban is too extreme; schools should just set less."},
+    {"side": "pro", "round": "closing", "text": "The evidence for homework at primary level is weak, its costs fall hardest on children without help at home, and the benefits my opponent names, habits and parent involvement, can be had without it. A ban protects play and fairness."},
+    {"side": "con", "round": "closing", "text": "Homework is a tradition that works for many families. Instead of banning it, we should keep it small and useful."}
+  ]
+}

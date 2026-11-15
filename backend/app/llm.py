@@ -20,6 +20,10 @@ class LLMError(Exception):
     """The model call failed after retries, or returned output we could not use."""
 
 
+class OutOfTokens(LLMError):
+    """The model hit max_tokens before giving an answer, typically by spending them all on reasoning."""
+
+
 class RateLimited(LLMError):
     """429 from OpenRouter. retry_after is in seconds when the server said so."""
 
@@ -105,11 +109,13 @@ class LLMClient:
         model: str,
         temperature: float = 0.7,
         max_tokens: int = 800,
+        reasoning: dict[str, Any] | None = None,
     ) -> CallResult:
         start = time.monotonic()
-        body, attempts = self._post(
-            {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-        )
+        payload = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+        if reasoning is not None:
+            payload["reasoning"] = reasoning
+        body, attempts = self._post(payload)
         return CallResult(
             text=_message_text(body),
             model=body.get("model", model),
@@ -125,6 +131,7 @@ class LLMClient:
         schema: type[BaseModel],
         temperature: float = 0.2,
         max_tokens: int = 1500,
+        reasoning: dict[str, Any] | None = None,
     ) -> StructuredResult:
         """Ask for JSON matching `schema`. If it doesn't validate, send the error back once and ask for a fix."""
         start = time.monotonic()
@@ -142,6 +149,8 @@ class LLMClient:
                 },
             },
         }
+        if reasoning is not None:  # e.g. {"effort": "low"} or {"enabled": False}; see OpenRouter docs
+            payload["reasoning"] = reasoning
         body, attempts = self._post(payload)
         text = _message_text(body)
         try:
@@ -178,6 +187,10 @@ def _message_text(body: dict[str, Any]) -> str:
     except (KeyError, IndexError, TypeError) as e:
         raise LLMError(f"unexpected response shape: {str(body)[:300]}") from e
     if not isinstance(content, str) or not content.strip():
+        choice = body["choices"][0]
+        if choice.get("finish_reason") == "length":
+            used = ((body.get("usage") or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
+            raise OutOfTokens(f"ran out of tokens before answering (finish_reason=length, reasoning tokens={used})")
         raise LLMError("model returned an empty message")
     return content
 
