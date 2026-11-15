@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "judge": "v0",
+    "judge_model": "nvidia/nemotron-3.5-super-vl:free",
+    "writer_model": "inclusionai/ling-3.2-flash:free",
+    "debates": 1,
+    "subset": 1,
+    "complete": true,
+    "stopped": null,
+    "updated": "2026-11-15T21:26+00:00"
+  },
+  "summary": {
+    "progress": {
+      "original": "1/1",
+      "swapped": "1/1",
+      "rerun": "1/1",
+      "padded_weak": "1/1",
+      "selfpref_strong": "1/1",
+      "selfpref_weak": "1/1"
+    },
+    "valid_output": {
+      "original": {
+        "n": 1,
+        "valid": 1,
+        "rate": 1
+      },
+      "swapped": {
+        "n": 1,
+        "valid": 1,
+        "rate": 1
+      },
+      "rerun": {
+        "n": 1,
+        "valid": 1,
+        "rate": 1
+      },
+      "padded_weak": {
+        "n": 1,
+        "valid": 0,
+        "rate": 0
+      },
+      "selfpref_strong": {
+        "n": 1,
+        "valid": 1,
+        "rate": 1
+      },
+      "selfpref_weak": {
+        "n": 1,
+        "valid": 1,
+        "rate": 1
+      }
+    },
+    "accuracy": {
+      "original": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1
+      },
+      "swapped": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1
+      },
+      "rerun": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1
+      },
+      "padded_weak": {
+        "n": 0,
+        "correct": 0,
+        "rate": null
+      },
+      "selfpref_strong": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1
+      },
+      "selfpref_weak": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1
+      }
+    },
+    "order_swap_consistency": {
+      "pairs": 1,
+      "same": 1,
+      "flips": 0,
+      "rate": 1
+    },
+    "rerun_consistency": {
+      "pairs": 1,
+      "same": 1,
+      "flips": 0,
+      "rate": 1
+    },
+    "length_bias": {
+      "pairs": 0,
+      "mean_weak_gain": null,
+      "flips_to_weak": 0
+    },
+    "self_preference": {
+      "n": 1,
+      "margin_original": 6,
+      "margin_strong_reworded_by_judge_family": 7,
+      "margin_weak_reworded_by_judge_family": 8,
+      "accuracy_weak_reworded": 1
+    },
+    "quotes": {
+      "kept": 79,
+      "dropped": 0,
+      "drop_rate": 0
+    }
+  }
+}

@@ -10,6 +10,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </Link>
         <nav>
           <Link to="/">Debate</Link>
+          <Link to="/judge">Judge report card</Link>
         </nav>
       </header>
       <main>{children}</main>

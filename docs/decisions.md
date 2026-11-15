@@ -167,3 +167,18 @@ All free OpenRouter models. They're set in `backend/app/config.py`, and env vars
   - Screenshots are in `docs/screenshots/`.
 - **Known rough edge:** the judge's summary says "PRO" and "CON" while the screen says "For" and "Against".
 - **Not checked:** dark mode screenshots, and screen-reader behaviour beyond labels and live regions.
+
+## Judge report card (16 Nov 2026, step 9)
+
+- **Page:** `/judge`, linked from the header.
+- **Where the numbers come from:**
+  - `npm run sync-evals` copies the `meta` and `summary` of each `backend/evals/results/*.json` into `frontend/src/data/evals/`. The individual judgments are not copied.
+  - A test (`frontend/tests/sync-evals.test.mjs`) fails if the site's copy differs from the backend file. I checked that it catches drift by editing one number: the test failed, and passed again after restoring it.
+- **Form:** four headline tiles, a table by test condition with a small bar per row, and the bias checks in sentences.
+  - There's one series, so one colour and no legend.
+  - Every value is printed next to its bar, so the table is also the accessible view.
+- **Small samples are shown as counts, not percentages.** Below 10 judged debates a tile says "1 of 1", not "100%". The quotes tile already shows a percentage because it counts 79 quotes.
+- **In-progress runs say so.** While a run is incomplete, a notice says how many of the 40 debates are judged and that nothing shown is a result yet.
+- **Limits are stated on the page:** the test debates are AI-written (so "stronger" means better argued, not true), weakened arguments may be easy to spot, and 40 is a small sample.
+- **Checked:** renders at 1280 px, 390 px and in dark mode with no horizontal scroll and no page errors. Screenshots are in `docs/screenshots/judge-*.png`.
+- **To do when judge v1 exists:** add it to `REPORTS` in `src/data/evals/index.ts`, and add a v0-against-v1 comparison at the top of the page.
