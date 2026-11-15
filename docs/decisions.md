@@ -45,3 +45,38 @@ All free OpenRouter models. They're set in `backend/app/config.py`, and env vars
   - So the evals must treat a single judgment as noisy.
   - Measuring how often a verdict changes on a plain re-run, before testing order swaps, tells us how much of any later "flip" is just noise.
 - **Speed:** about 30–45 s per judgment. That's fine for offline evals. In the app, the judge runs once after the closing round, behind a "the judge is deliberating" screen.
+
+## Eval set and runner (16 Nov 2026, step 4)
+
+**How the labelled debates are made** (`evals/generate.py`, `evals/variants.py`):
+- 40 everyday topics, chosen to avoid politics and religion (`evals/topics.json`).
+- For each topic, the writer model writes one whole debate in which one side is weakened in exactly one named way:
+  - no specific evidence
+  - a central logical fallacy
+  - ignores the other side's main point
+- The side and the type are fixed in advance by a seeded random choice, so re-runs ask the same questions. The other side is the label.
+- The writer is told to keep both sides fluent and about the same length. The weak-to-strong length ratio is measured, so length can't give the answer away; the first debate came out at 1.03.
+- **Limitation:** the writer invents "real-sounding" evidence. In debate d00, CON describes the 2006 Cooper review as finding a positive effect "even in early grades". The hand-written sample states Cooper's actual primary-school finding, which is almost no link. So the label means "uses specific evidence and engages", not "is factually true". A judge that fact-checks could disagree with the label for a defensible reason.
+- **Writer settings:** reasoning is off. With `reasoning={"effort": "low"}`, Ling spent all 4,000 tokens thinking and returned nothing. Writing doesn't need thinking.
+
+**What the runner measures** (`evals/run.py`, `evals/metrics.py`):
+
+| Condition | Debates | What it tests |
+|---|---|---|
+| original | all | Accuracy: does the judge pick the labelled side? |
+| swapped | all | CON speaks first in every round, same words. Does the winner change? |
+| rerun | first 15 | The same debate judged again. This is the noise floor: some "flips" happen with no change at all (see the judge v0 section). |
+| padded_weak | first 15 | The weak side made about twice as long, with nothing new. Does length buy points? |
+| selfpref_strong, selfpref_weak | first 15 | One side reworded by the judge's own model family. Does the judge favour its own family's writing? Rewording can also change quality, so this is a signal, not proof. |
+
+- Conditions run in that order, most important first, so a partial day still gives the key numbers.
+- **Free-cap handling** (`evals/cached_llm.py`):
+  - Every answer is cached on disk under a hash of the model, prompt and settings.
+  - Calls are counted against a daily allowance (default 35, by UTC day). This is our own count, because OpenRouter's counter didn't add up (see Models above).
+  - On a cap or rate limit the runner stops and saves partial results; running it again continues from where it stopped.
+  - Failures are cached too, so a broken item doesn't use up the allowance every day. `--retry-failed` overrides that.
+- **Free models can be busy upstream, not just capped:**
+  - On 16 Nov, Ling returned "temporarily rate-limited upstream" from Ant Digital. That's the same kind of failure Gemma had on 15 Nov.
+  - So the stop message now says to wait a few minutes in that case, rather than a day.
+  - `--writer` lets the generator use another model if one stays busy.
+- **Results file:** `evals/results/<judge>.json` and `.md`, overwritten as the run fills in, with git keeping the history. The plan said `<date>-<judge>.json`, but a run spans several days, so one file per judge version is clearer.
