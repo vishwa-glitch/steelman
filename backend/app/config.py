@@ -64,7 +64,9 @@ def load_settings() -> Settings:
         daily_ai_call_limit=int(get("DAILY_AI_CALL_LIMIT", "12")),
         debates_per_ip_per_day=int(get("DEBATES_PER_IP_PER_DAY", "4")),
         ip_hash_salt=get("IP_HASH_SALT", "local-dev-salt"),
-        cors_origins=tuple(o.strip() for o in get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()),
+        cors_origins=tuple(  # browsers send the origin with no trailing slash, so drop any that was typed
+            o.strip().rstrip("/") for o in get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()
+        ),
         # Only behind a proxy we control: X-Forwarded-For can be forged by anyone otherwise.
         trust_proxy=get("TRUST_PROXY", "0") == "1",
     )
