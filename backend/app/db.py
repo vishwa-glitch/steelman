@@ -55,4 +55,8 @@ class VisitorUsageRow(Base):
 
 
 def make_session_factory(database_url: str) -> sessionmaker:
-    return sessionmaker(create_engine(database_url, pool_pre_ping=True), expire_on_commit=False)
+    # prepare_threshold=None: psycopg would otherwise turn repeated queries into server-side prepared
+    # statements, which can break behind a transaction-mode connection pooler such as Neon's.
+    connect_args = {"prepare_threshold": None} if database_url.startswith("postgresql+psycopg") else {}
+    engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
+    return sessionmaker(engine, expire_on_commit=False)
