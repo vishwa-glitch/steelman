@@ -264,6 +264,14 @@ def add_turn(debate_id: uuid.UUID, body: NewTurn, db: Session = Depends(get_db))
     return view(row)
 
 
+# Per-model call settings. The primary (Ling) writes best with reasoning off. The backup (ERNIE) refuses
+# reasoning off ("Reasoning is mandatory", 17 Nov), so it gets low effort and room for its thinking.
+OPPONENT_CALLS = (
+    {"temperature": 0.7, "max_tokens": 700, "reasoning": {"enabled": False}},
+    {"temperature": 0.7, "max_tokens": 3000, "reasoning": {"effort": "low"}},
+)
+
+
 def start_opponent(d: Debate, llm, settings: Settings, db: Session):
     """Start streaming the AI's turn. If the opponent's free model is busy or down before it has said
     anything, try the backup model once (counted as one more AI call). Returns (stream, first piece)."""
@@ -273,9 +281,7 @@ def start_opponent(d: Debate, llm, settings: Settings, db: Session):
             if model == settings.opponent_model or not isinstance(last, (RateLimited, TransientError)):
                 break
             spend(db, settings)
-        stream = llm.chat_stream(
-            opponent_messages(d), model, temperature=0.7, max_tokens=700, reasoning={"enabled": False}
-        )
+        stream = llm.chat_stream(opponent_messages(d), model, **OPPONENT_CALLS[i])
         try:
             return stream, next(stream)  # fail with a normal HTTP error if the model can't even start
         except (LLMError, StopIteration) as e:

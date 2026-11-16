@@ -217,3 +217,22 @@ A separate reviewer with no context read the code and reproduced the defects bel
 | 8 | The eval allowance under-counted retries and repairs. | It now counts the requests the client actually sent. | `test_budget_counts_every_request_the_client_sent` |
 
 I ran the five new tests against the old code: all five fail there, and all pass now.
+
+## Deployment (17 Nov 2026, step 11)
+
+- **Hosts:** frontend on Vercel (`https://steelman-ruby.vercel.app`), backend on Vercel's Python runtime (`https://steelman-api-delta.vercel.app`, region `sin1`), database on Neon (Postgres 18.7, `ap-southeast-1`, pooled connection).
+- **Why not Render:** its free tier sleeps after 15 minutes idle and takes about a minute to wake ([Render docs](https://render.com/docs/your-first-deploy)). The first visitor would see a dead site.
+  - Koyeb: sleeps after 1 hour, wakes in 1–5 s.
+  - Fly.io: no free tier for new accounts.
+  - Railway: about $5 a month.
+  - Cloud Run: needs a card.
+  - Vercel runs FastAPI directly, allows 300 s per request on the free plan, and supports streaming ([Vercel docs](https://vercel.com/docs/functions/configuring-functions/duration)).
+- **Migrations** are run from a laptop against Neon's direct (unpooled) URL, kept in `backend/.env.neon`, which git ignores. The app uses the pooled URL with psycopg's automatic prepared statements turned off.
+- **Measured 17 Nov:**
+  - `/health` 0.2 s; first `/status` 2.3 s (includes the database waking).
+  - CORS accepts the frontend and rejects other origins.
+  - The SPA routes and favicon are served.
+- **Backup opponent:**
+  - On the first live debate, the opponent's free model (Ling) failed on the AI's opening. One call was spent and the claim was released. It worked when tried again (18 s).
+  - Upstream rate limits on free models are the main live risk. The backend now falls back once to `OPPONENT_BACKUP_MODEL`: ERNIE 5.5 Flash, a different maker from the judge, with low reasoning effort because it refuses reasoning off.
+  - Gemma was also rate-limited upstream when tried as the backup.
