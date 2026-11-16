@@ -13,6 +13,7 @@ browser continue it. The share slug is a separate random value and gives read-on
 """
 
 import json
+import logging
 import os
 import secrets
 import uuid
@@ -49,10 +50,11 @@ from app.limits import (
     refund_visitor_start,
     spend_ai_call,
 )
-from app.llm import LLMClient, LLMError, RateLimited, TransientError
+from app.llm import LLMClient, LLMError, RateLimited
 from app.transcript import Turn
 
 router = APIRouter()
+log = logging.getLogger("steelman")
 RESTING = "Live mode is resting for today. You can still watch the recorded debates."
 BUSY = "The AI model is busy right now. Please try again in a minute."
 
@@ -273,12 +275,13 @@ OPPONENT_CALLS = (
 
 
 def start_opponent(d: Debate, llm, settings: Settings, db: Session):
-    """Start streaming the AI's turn. If the opponent's free model is busy or down before it has said
-    anything, try the backup model once (counted as one more AI call). Returns (stream, first piece)."""
+    """Start streaming the AI's turn. If the opponent's model fails before it has said anything (busy,
+    down, or an error), try the backup model once, counted as one more AI call. Returns (stream, first piece).
+    Failures are logged so they show up in the host's logs."""
     last: Exception | None = None
     for i, model in enumerate((settings.opponent_model, settings.opponent_backup_model)):
         if i == 1:
-            if model == settings.opponent_model or not isinstance(last, (RateLimited, TransientError)):
+            if model == settings.opponent_model:
                 break
             spend(db, settings)
         stream = llm.chat_stream(opponent_messages(d), model, **OPPONENT_CALLS[i])
@@ -286,6 +289,7 @@ def start_opponent(d: Debate, llm, settings: Settings, db: Session):
             return stream, next(stream)  # fail with a normal HTTP error if the model can't even start
         except (LLMError, StopIteration) as e:
             last = e
+            log.warning("opponent model %s failed before replying: %s: %s", model, type(e).__name__, str(e)[:300])
     if isinstance(last, RateLimited):
         raise HTTPException(503, BUSY)
     raise HTTPException(502, "The AI couldn't reply. Please try again.")

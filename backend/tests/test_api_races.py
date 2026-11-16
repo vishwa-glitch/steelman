@@ -215,3 +215,25 @@ def test_both_opponent_models_busy_gives_503_and_keeps_state(make_client):
     assert client.post(f"/debates/{d['id']}/ai-turn").status_code == 503
     assert llm.calls.count("stream") == 2
     assert len(client.get(f"/debates/{d['id']}").json()["turns"]) == 1
+
+
+def test_any_opponent_failure_before_replying_tries_the_backup(make_client):
+    from app.llm import LLMError
+
+    class BrokenPrimary(FakeLLM):
+        def __init__(self):
+            super().__init__()
+            self.models = []
+
+        def chat_stream(self, messages, model, **kw):
+            self.models.append(model)
+            if model == "primary":
+                raise LLMError("HTTP 502: bad gateway")
+            yield from self.stream
+
+    llm = BrokenPrimary()
+    client = make_client(llm, opponent_model="primary", opponent_backup_model="backup")
+    d = client.post("/debates", json={"motion": MOTION, "side": "pro"}).json()
+    client.post(f"/debates/{d['id']}/turns", json={"text": TURN})
+    assert events(client.post(f"/debates/{d['id']}/ai-turn"))[-1]["done"] is True
+    assert llm.models == ["primary", "backup"]

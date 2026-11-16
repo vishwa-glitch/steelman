@@ -24,16 +24,33 @@ await page.getByRole('button', { name: 'Public transport should be free.' }).cli
 await page.getByRole('button', { name: 'Start the debate' }).click()
 await page.waitForURL(/\/debate\//, { timeout: 60000 })
 console.log(`${at()} debate created (topic check passed)`)
+// Wait for `target`, pressing "Try again" (at most twice in total) if the page shows a model error.
+let retries = 0
+async function waitOrRetry(target, what) {
+  const deadline = Date.now() + 240000
+  while (Date.now() < deadline) {
+    if (await target.isVisible().catch(() => false)) return
+    const retry = page.getByRole('button', { name: 'Try again' })
+    if (await retry.isVisible().catch(() => false)) {
+      const msg = await page.getByRole('alert').innerText().catch(() => '?')
+      if (retries >= 2) throw new Error(`${what}: still failing after 2 retries: ${msg}`)
+      retries += 1
+      console.log(`${at()} error shown while waiting for ${what}: "${msg.replace('Try again', '').trim()}" -> pressing Try again`)
+      await retry.click()
+    }
+    await page.waitForTimeout(1000)
+  }
+  throw new Error(`${what}: timed out`)
+}
+
 for (const [i, round] of ['opening', 'rebuttal', 'closing'].entries()) {
-  await page.getByLabel(`Your ${round}`).waitFor({ timeout: 120000 })
+  await waitOrRetry(page.getByLabel(`Your ${round}`), `your ${round} box`)
   if (i > 0) console.log(`${at()} AI ${['opening', 'rebuttal'][i - 1]} finished`)
   await page.getByLabel(`Your ${round}`).fill(TURNS[i])
   await page.getByRole('button', { name: 'Submit turn' }).click()
   if (round === 'rebuttal') await page.screenshot({ path: `${shots}/live-mid-debate.png`, fullPage: true })
 }
-await page.getByText('The judge is deliberating').waitFor({ timeout: 120000 })
-console.log(`${at()} AI closing finished, judge started`)
-await page.getByText("The judge's verdict").waitFor({ timeout: 240000 })
+await waitOrRetry(page.getByText("The judge's verdict"), 'the verdict')
 console.log(`${at()} verdict shown: ${await page.locator('.scorecard h2').innerText()}`)
 console.log(`   highlighted quotes: ${await page.locator('mark').count()}, empty cells: ${await page.locator('.empty').count()}`)
 console.log(`   ${await page.locator('.fineprint').innerText()}`)
@@ -44,5 +61,7 @@ const p2 = await (await browser.newContext()).newPage()
 await p2.goto(share)
 await p2.getByText('Shared debate').waitFor({ timeout: 30000 })
 console.log(`   share link opens in a fresh browser: yes, read-only: ${(await p2.getByLabel(/Your /).count()) === 0}`)
+console.log(`retries pressed: ${retries}`)
+// failed requests (503/502) log a console error by design of the browser; report them separately
 console.log(`console/page errors: ${errors.length} ${errors.slice(0, 3).join(' | ')}`)
 await browser.close()
