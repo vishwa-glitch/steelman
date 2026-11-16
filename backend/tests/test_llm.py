@@ -23,6 +23,7 @@ SETTINGS = Settings(
     opponent_model="opp",
     judge_model="judge",
     judge_backup_model="backup",
+    opponent_backup_model="opp-backup",
     request_timeout_s=5,
     database_url="",
     daily_ai_call_limit=12,

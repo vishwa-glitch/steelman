@@ -49,7 +49,7 @@ from app.limits import (
     refund_visitor_start,
     spend_ai_call,
 )
-from app.llm import LLMClient, LLMError, RateLimited
+from app.llm import LLMClient, LLMError, RateLimited, TransientError
 from app.transcript import Turn
 
 router = APIRouter()
@@ -264,6 +264,27 @@ def add_turn(debate_id: uuid.UUID, body: NewTurn, db: Session = Depends(get_db))
     return view(row)
 
 
+def start_opponent(d: Debate, llm, settings: Settings, db: Session):
+    """Start streaming the AI's turn. If the opponent's free model is busy or down before it has said
+    anything, try the backup model once (counted as one more AI call). Returns (stream, first piece)."""
+    last: Exception | None = None
+    for i, model in enumerate((settings.opponent_model, settings.opponent_backup_model)):
+        if i == 1:
+            if model == settings.opponent_model or not isinstance(last, (RateLimited, TransientError)):
+                break
+            spend(db, settings)
+        stream = llm.chat_stream(
+            opponent_messages(d), model, temperature=0.7, max_tokens=700, reasoning={"enabled": False}
+        )
+        try:
+            return stream, next(stream)  # fail with a normal HTTP error if the model can't even start
+        except (LLMError, StopIteration) as e:
+            last = e
+    if isinstance(last, RateLimited):
+        raise HTTPException(503, BUSY)
+    raise HTTPException(502, "The AI couldn't reply. Please try again.")
+
+
 def sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
@@ -287,15 +308,7 @@ def ai_turn(
         raise HTTPException(409, "The AI is already replying.")
     try:
         spend(db, settings)
-        stream = llm.chat_stream(
-            opponent_messages(d), settings.opponent_model, temperature=0.7, max_tokens=700, reasoning={"enabled": False}
-        )
-        try:
-            first = next(stream)  # fail with a normal HTTP error if the model can't even start
-        except RateLimited:
-            raise HTTPException(503, BUSY) from None
-        except LLMError, StopIteration:
-            raise HTTPException(502, "The AI couldn't reply. Please try again.") from None
+        stream, first = start_opponent(d, llm, settings, db)
     except HTTPException:
         release(db, debate_id, "ai_turn_started_at")
         raise

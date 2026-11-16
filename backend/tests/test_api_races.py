@@ -180,3 +180,38 @@ def test_forwarded_header_uses_the_proxy_added_entry(make_client):
     ]
     assert codes == [201, 429, 429]  # a forged first entry doesn't make a new visitor
     assert isinstance(StructuredResult, type)
+
+
+def test_busy_opponent_falls_back_to_the_backup_model(make_client, migrated_db):
+    from app.llm import RateLimited
+
+    class BusyPrimary(FakeLLM):
+        def __init__(self):
+            super().__init__()
+            self.models = []
+
+        def chat_stream(self, messages, model, **kw):
+            self.models.append(model)
+            if len(self.models) == 1:
+                raise RateLimited("busy upstream", None)
+            yield from self.stream
+
+    llm = BusyPrimary()
+    client = make_client(llm, opponent_model="primary", opponent_backup_model="backup")
+    d = client.post("/debates", json={"motion": MOTION, "side": "pro"}).json()
+    client.post(f"/debates/{d['id']}/turns", json={"text": TURN})
+    assert events(client.post(f"/debates/{d['id']}/ai-turn"))[-1]["done"] is True
+    assert llm.models == ["primary", "backup"]
+    assert db_value(migrated_db, "select ai_calls from usage") == 3  # topic check + primary attempt + backup
+
+
+def test_both_opponent_models_busy_gives_503_and_keeps_state(make_client):
+    from app.llm import RateLimited
+
+    llm = FakeLLM(stream_error=RateLimited("busy", None))
+    client = make_client(llm, opponent_model="primary", opponent_backup_model="backup")
+    d = client.post("/debates", json={"motion": MOTION, "side": "pro"}).json()
+    client.post(f"/debates/{d['id']}/turns", json={"text": TURN})
+    assert client.post(f"/debates/{d['id']}/ai-turn").status_code == 503
+    assert llm.calls.count("stream") == 2
+    assert len(client.get(f"/debates/{d['id']}").json()["turns"]) == 1

@@ -27,6 +27,7 @@ class Settings:
     opponent_model: str
     judge_model: str
     judge_backup_model: str
+    opponent_backup_model: str
     request_timeout_s: float
     database_url: str
     daily_ai_call_limit: int
@@ -56,6 +57,8 @@ def load_settings() -> Settings:
         opponent_model=get("OPPONENT_MODEL", "inclusionai/ling-3.2-flash:free"),
         judge_model=get("JUDGE_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
         judge_backup_model=get("JUDGE_BACKUP_MODEL", "baidu/ernie-5.5-flash-preview:free"),
+        # Used when the opponent's free model is rate-limited upstream. Not the judge's maker (NVIDIA).
+        opponent_backup_model=get("OPPONENT_BACKUP_MODEL", "baidu/ernie-5.5-flash-preview:free"),
         request_timeout_s=float(get("REQUEST_TIMEOUT_S", "90")),
         database_url=normalize_db_url(
             get("DATABASE_URL", "postgresql+psycopg://steelman:steelman-local-only@localhost:5433/steelman")
