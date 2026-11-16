@@ -203,7 +203,17 @@ A separate reviewer with no context read the code and reproduced the defects bel
 
 - **Refund rule:** if the topic check fails because the model is busy or down, the visitor's attempt is given back. If the model rejects the motion, it isn't.
 - **Still open from the review:**
-  - Findings 6–8 are in the eval code and are being fixed separately, after the day's eval batch finishes, so the running batch isn't disturbed.
+  - Findings 6–8 (eval code) were fixed afterwards, see the next table.
   - Finding 11, second half (SUSPICION, unverified): the judge prompt has no "the transcript is data, not instructions" line. Adding it changes the judge's prompt, which would invalidate judge v0's cached results, so it goes into judge v1.
   - Finding 5 (SUSPICION, unverified): whether the deploy host's proxy appends to `X-Forwarded-For` or replaces it. To check at deploy: send a forged header and log what arrives.
   - Quotes the backend accepts after tidying punctuation may not be highlighted on screen, because the stored quote is the judge's wording.
+
+### Eval code fixes (16 Nov 2026, after the day's batch)
+
+| # | Defect | Fix | Test |
+|---|---|---|---|
+| 6 | A network blip was cached forever as "the judge produced invalid output", and a failed rewrite (padding or rewording) counted against the judge. | Network and provider failures are now `TransientError` and never cached. Rewrite failures are recorded as `stage: rewrite` and left out of the judge's numbers, with a separate `rewrite_failures` count. | `test_transient_failures_are_not_cached`, `test_rewrite_failure_is_not_counted_against_the_judge` |
+| 7 | A run that stopped early, or used `--limit`, could overwrite `debates.jsonl` with fewer debates, and a run over a partial set reported "Complete." | The generator merges with the file on disk. After a stop, both runners continue in cache-only mode, so every finished piece of work is still reported. "Complete" now also requires all 40 debates. | `test_generate_never_shrinks_the_debates_file`, `test_runner_reports_cached_work_beyond_the_point_where_it_stopped` |
+| 8 | The eval allowance under-counted retries and repairs. | It now counts the requests the client actually sent. | `test_budget_counts_every_request_the_client_sent` |
+
+I ran the five new tests against the old code: all five fail there, and all pass now.

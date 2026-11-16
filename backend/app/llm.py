@@ -21,6 +21,11 @@ class LLMError(Exception):
     """The model call failed after retries, or returned output we could not use."""
 
 
+class TransientError(LLMError):
+    """A failure of the connection or the provider (timeout, network, 5xx), not of the model's answer.
+    Worth retrying later; never worth caching as "the model failed"."""
+
+
 class OutOfTokens(LLMError):
     """The model hit max_tokens before giving an answer, typically by spending them all on reasoning."""
 
@@ -104,7 +109,7 @@ class LLMClient:
                     raise LLMError(f"HTTP {res.status_code}: {res.text[:300]}")
             if attempt <= self.max_retries:
                 self.sleep(2**attempt)
-        raise LLMError(f"failed after {self.max_retries + 1} attempts: {last_error}")
+        raise TransientError(f"failed after {self.max_retries + 1} attempts: {last_error}")
 
     def chat(
         self,
@@ -178,9 +183,9 @@ class LLMClient:
                         got_text = True
                         yield delta
         except httpx.TimeoutException as e:
-            raise LLMError("timed out") from e
+            raise TransientError("timed out") from e
         except httpx.HTTPError as e:
-            raise LLMError(f"network error: {e}") from e
+            raise TransientError(f"network error: {e}") from e
         if not got_text:
             raise LLMError("model returned an empty message")
         if not finished:  # the connection closed mid-reply: don't pass half a sentence off as a whole turn

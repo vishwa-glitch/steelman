@@ -266,3 +266,84 @@ def test_runner_stops_at_allowance_and_resumes_without_repeating(tmp_path):
     # padded/selfpref need one rewrite call each, plus one judge call; the 4 cached judgments cost nothing
     assert fake2.calls == (6 - 4) + 1 + 3 * 2
     assert all(r["correct"] for r in records2 if r["ok"])
+
+
+# ---------- fixes from the fresh review (16 Nov) ----------
+
+
+def test_transient_failures_are_not_cached(tmp_path):
+    from app.llm import TransientError
+
+    c, fake, _ = make_cached(tmp_path, behaviour=lambda n: TransientError("timed out") if n == 1 else '{"v": 3}')
+    try:
+        c.structured(MSG, "m", Small)
+    except TransientError:
+        pass
+    assert c.structured(MSG, "m", Small).data.v == 3 and fake.calls == 2  # retried, not a cached failure
+
+
+def test_budget_counts_every_request_the_client_sent(tmp_path):
+    c, fake, budget = make_cached(tmp_path)
+    fake.requests_sent = 0
+    orig = fake.structured
+
+    def three_requests(*a, **k):
+        fake.requests_sent += 3  # e.g. a 5xx retry plus a repair
+        return orig(*a, **k)
+
+    fake.structured = three_requests
+    c.structured(MSG, "m", Small)
+    assert budget.used() == 3
+
+
+def test_rewrite_failure_is_not_counted_against_the_judge(tmp_path):
+    from app.llm import LLMError
+
+    c, fake, _ = make_cached(tmp_path)
+    orig = fake.structured
+
+    def rewriter_breaks(messages, model, schema, **kw):
+        if schema.__name__ == "ThreeTurns":
+            fake.calls += 1
+            raise LLMError("JSON did not match the schema")
+        return orig(messages, model, schema, **kw)
+
+    fake.structured = rewriter_breaks
+    records, planned, stopped = run(debates(2), fake_judge, c, "w", "j", subset_n=1)
+    s = summarise(records, planned)
+    assert stopped is None
+    assert s["valid_output"]["padded_weak"]["n"] == 0  # not "0 of 1 valid"
+    assert s["rewrite_failures"]["padded_weak"] == 1
+
+
+def test_runner_reports_cached_work_beyond_the_point_where_it_stopped(tmp_path):
+    ds = debates(3)
+    c, _, _ = make_cached(tmp_path, allowance=50)
+    run(ds[1:], fake_judge, c, "w", "j", subset_n=0)  # d1 and d2 are cached; d0 is not
+    # a new day with no allowance: d0 stops the run, but d1 and d2 must still be reported from the cache
+    c2, _, _ = make_cached(tmp_path, allowance=0, today="2026-11-17")
+    records, planned, stopped = run(ds, fake_judge, c2, "w", "j", subset_n=0)
+    assert stopped and "BudgetExhausted" in stopped
+    assert sorted((r["condition"], r["id"]) for r in records) == [
+        ("original", "d1"),
+        ("original", "d2"),
+        ("swapped", "d1"),
+        ("swapped", "d2"),
+    ]
+
+
+def test_generate_never_shrinks_the_debates_file(tmp_path, monkeypatch):
+    import evals.generate as g
+
+    monkeypatch.setattr(g, "DATA", tmp_path)
+    existing = debates(3)
+    (tmp_path / "debates.jsonl").write_text("".join(d.model_dump_json() + "\n" for d in existing))
+
+    # today nothing new could be written
+    monkeypatch.setattr(g, "generate", lambda cached, writer, items: ([], [], False))
+    monkeypatch.setattr(g, "load_settings", lambda: type("S", (), {"opponent_model": "w", "openrouter_api_key": "k"})())
+    monkeypatch.setattr(g, "LLMClient", lambda s: None)
+    monkeypatch.setattr("sys.argv", ["generate", "--limit", "1"])
+    g.main()
+    kept = [x for x in (tmp_path / "debates.jsonl").read_text().splitlines() if x]
+    assert len(kept) == 3

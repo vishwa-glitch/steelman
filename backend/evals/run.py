@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app import judge as judge_v0
 from app.config import load_settings
-from app.llm import LLMClient, LLMError, RateLimited
+from app.llm import LLMClient, LLMError, RateLimited, TransientError
 from evals.cached_llm import DEFAULT_ALLOWANCE, NOT_FINISHED_HINT, Budget, BudgetExhausted, CachedLLM
 from evals.metrics import summarise
 from evals.variants import (
@@ -28,6 +28,7 @@ from evals.variants import (
 
 HERE = Path(__file__).parent
 JUDGES = {"v0": judge_v0.judge}
+PLANNED_DEBATES = len(json.loads((HERE / "topics.json").read_text()))
 FULL = ("original", "swapped")
 SUBSET = ("rerun", "padded_weak", "selfpref_strong", "selfpref_weak")
 REWRITE_SETTINGS = dict(temperature=0.3, max_tokens=4000, reasoning={"effort": "low"})
@@ -81,23 +82,41 @@ def record(d: EvalDebate, condition: str, res=None, error: str | None = None) ->
     }
 
 
+class RewriteFailed(Exception):
+    """Building a variant (padding, rewording) failed. That says nothing about the judge, so it is recorded
+    separately and left out of the judge's valid-output and accuracy numbers."""
+
+
 def run(debates, judge_fn, cached, writer_model, judge_model, subset_n) -> tuple[list[dict], dict, str | None]:
     plan = [(c, debates) for c in FULL] + [(c, debates[:subset_n]) for c in SUBSET]
     planned = {c: len(ds) for c, ds in plan}
     records, stopped = [], None
     for condition, ds in plan:
-        client = cached.with_tag("rerun-1") if condition == "rerun" else cached
         for d in ds:
+            client = cached.with_tag("rerun-1") if condition == "rerun" else cached
             try:
-                t = build(d, condition, cached, writer_model, judge_model)
+                try:
+                    t = build(d, condition, cached, writer_model, judge_model)
+                except LLMError as e:
+                    raise RewriteFailed(f"{type(e).__name__}: {str(e)[:200]}") from e
                 records.append(record(d, condition, res=judge_fn(t, client, judge_model)))
-            except (BudgetExhausted, RateLimited) as e:
-                stopped = f"{type(e).__name__}: {e}"
-                return records, planned, stopped
+            except (BudgetExhausted, RateLimited, TransientError) as e:
+                if stopped is None:
+                    stopped = f"{type(e).__name__}: {str(e)[:300]}"
+                    cached.cache_only = True  # report everything already cached, spend nothing more
+            except RewriteFailed as e:
+                records.append({**record(d, condition, error=str(e)), "stage": "rewrite"})
             except LLMError as e:
                 records.append(record(d, condition, error=f"{type(e).__name__}: {str(e)[:200]}"))
         print(f"  {condition}: done", flush=True)
     return records, planned, stopped
+
+
+def status_line(meta: dict) -> str:
+    if meta["complete"]:
+        return "Complete."
+    why = meta["stopped"] or "more debates still to generate"
+    return f"Incomplete: {meta['debates']} of {meta['planned_debates']} debates written; {why}"
 
 
 def to_markdown(judge_name: str, meta: dict, s: dict) -> str:
@@ -106,7 +125,7 @@ def to_markdown(judge_name: str, meta: dict, s: dict) -> str:
         f"# Judge {judge_name}: eval results",
         "",
         f"Judge model `{meta['judge_model']}`, debates written by `{meta['writer_model']}`. "
-        f"Updated {meta['updated']}. {'Complete.' if meta['complete'] else 'Incomplete: ' + str(meta['stopped'])}",
+        f"Updated {meta['updated']}. {status_line(meta)}",
         "",
         "| Condition | Progress | Valid output | Accuracy |",
         "|---|---|---|---|",
@@ -155,7 +174,8 @@ def main() -> int:
         "writer_model": ", ".join(sorted({d.writer_model for d in debates})),
         "debates": len(debates),
         "subset": args.subset,
-        "complete": stopped is None,
+        "planned_debates": PLANNED_DEBATES,
+        "complete": stopped is None and len(debates) == PLANNED_DEBATES,
         "stopped": stopped,
         "updated": dt.datetime.now(dt.UTC).isoformat(timespec="minutes"),
     }

@@ -7,7 +7,12 @@ from statistics import mean
 
 
 def _by(records, condition):
-    return {r["id"]: r for r in records if r["condition"] == condition}
+    """Judge records only: a failed rewrite (padding, rewording) is not the judge's failure."""
+    return {r["id"]: r for r in records if r["condition"] == condition and r.get("stage") != "rewrite"}
+
+
+def rewrite_failures(records, condition):
+    return sum(1 for r in records if r["condition"] == condition and r.get("stage") == "rewrite")
 
 
 def _ok(records, condition):
@@ -82,6 +87,7 @@ def summarise(records, planned: dict[str, int]) -> dict:
     conds = list(planned)
     return {
         "progress": {c: f"{len(_by(records, c))}/{planned[c]}" for c in conds},
+        "rewrite_failures": {c: rewrite_failures(records, c) for c in conds},
         "valid_output": {c: valid_rate(records, c) for c in conds},
         "accuracy": {c: accuracy(records, c) for c in conds},
         "order_swap_consistency": consistency(records, "original", "swapped"),
