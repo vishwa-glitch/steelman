@@ -220,3 +220,11 @@ def test_requests_sent_counts_retries_and_repairs():
     client, _, _ = make_client([httpx.Response(502, text="x"), reply("nope"), reply('{"winner": "A", "reason": "r"}')])
     client.structured(MSGS, "judge", Verdict)
     assert client.requests_sent == 3
+
+
+def test_database_url_from_hosts_gets_the_driver_name():
+    from app.config import normalize_db_url
+
+    assert normalize_db_url("postgres://u:p@h/db?sslmode=require") == "postgresql+psycopg://u:p@h/db?sslmode=require"
+    assert normalize_db_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert normalize_db_url("postgresql+psycopg://u:p@h/db") == "postgresql+psycopg://u:p@h/db"

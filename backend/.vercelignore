@@ -1,0 +1,5 @@
+tests/
+evals/
+.venv/
+.pytest_cache/
+.ruff_cache/

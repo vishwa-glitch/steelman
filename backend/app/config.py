@@ -36,6 +36,14 @@ class Settings:
     trust_proxy: bool
 
 
+def normalize_db_url(url: str) -> str:
+    """Hosts hand out URLs like postgresql://... or postgres://...; SQLAlchemy needs the driver named."""
+    for prefix in ("postgresql+psycopg://", "postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
 def load_settings() -> Settings:
     file_values = _read_env_file(ENV_FILE)
 
@@ -49,7 +57,9 @@ def load_settings() -> Settings:
         judge_model=get("JUDGE_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
         judge_backup_model=get("JUDGE_BACKUP_MODEL", "baidu/ernie-5.5-flash-preview:free"),
         request_timeout_s=float(get("REQUEST_TIMEOUT_S", "90")),
-        database_url=get("DATABASE_URL", "postgresql+psycopg://steelman:steelman-local-only@localhost:5433/steelman"),
+        database_url=normalize_db_url(
+            get("DATABASE_URL", "postgresql+psycopg://steelman:steelman-local-only@localhost:5433/steelman")
+        ),
         # The free cap is 50 requests a day for the whole account, shared with the evals (35 a day).
         daily_ai_call_limit=int(get("DAILY_AI_CALL_LIMIT", "12")),
         debates_per_ip_per_day=int(get("DEBATES_PER_IP_PER_DAY", "4")),

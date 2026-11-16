@@ -2,6 +2,19 @@
 name = "steelman-backend"
 version = "0.1.0"
 requires-python = ">=3.14"
+# Runtime dependencies (pinned). Vercel installs from here; tests and lint tools are in requirements-dev.txt.
+dependencies = [
+    "fastapi==0.163.0",
+    "httpx==0.28.1",
+    "pydantic==2.14.3",
+    "pydantic_core==2.50.4",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+    "alembic==1.20.1",
+    "psycopg==3.3.9",
+    "psycopg-binary==3.3.9",
+    "SQLAlchemy==2.1.8",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
