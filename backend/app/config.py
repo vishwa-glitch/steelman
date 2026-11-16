@@ -52,7 +52,7 @@ def load_settings() -> Settings:
         database_url=get("DATABASE_URL", "postgresql+psycopg://steelman:steelman-local-only@localhost:5433/steelman"),
         # The free cap is 50 requests a day for the whole account, shared with the evals (35 a day).
         daily_ai_call_limit=int(get("DAILY_AI_CALL_LIMIT", "12")),
-        debates_per_ip_per_day=int(get("DEBATES_PER_IP_PER_DAY", "3")),
+        debates_per_ip_per_day=int(get("DEBATES_PER_IP_PER_DAY", "4")),
         ip_hash_salt=get("IP_HASH_SALT", "local-dev-salt"),
         cors_origins=tuple(o.strip() for o in get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()),
         # Only behind a proxy we control: X-Forwarded-For can be forged by anyone otherwise.

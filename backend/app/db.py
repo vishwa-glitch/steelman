@@ -27,6 +27,10 @@ class DebateRow(Base):
     scorecard: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     judge_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     client_hash: Mapped[str] = mapped_column(String(64), index=True)
+    # Claims: set while an AI turn or a judgment is in flight, so a second request can't start (and pay for)
+    # the same work. A claim older than its timeout is treated as abandoned.
+    ai_turn_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    judge_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -38,6 +42,16 @@ class UsageRow(Base):
 
     day: Mapped[dt.date] = mapped_column(Date, primary_key=True)
     ai_calls: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class VisitorUsageRow(Base):
+    """How many debates a visitor (salted IP hash) has tried to start today."""
+
+    __tablename__ = "visitor_usage"
+
+    day: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    client_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    starts: Mapped[int] = mapped_column(Integer, default=0)
 
 
 def make_session_factory(database_url: str) -> sessionmaker:

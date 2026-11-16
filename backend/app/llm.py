@@ -66,6 +66,7 @@ class LLMClient:
         self.http = http or httpx.Client(timeout=self.settings.request_timeout_s)
         self.max_retries = max_retries
         self.sleep = sleep
+        self.requests_sent = 0  # every HTTP request to the provider, including retries and repairs
 
     def _post(self, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         """POST to chat/completions, retrying transient failures. Returns (json, attempts)."""
@@ -76,6 +77,7 @@ class LLMClient:
         }
         last_error = "unknown error"
         for attempt in range(1, self.max_retries + 2):
+            self.requests_sent += 1
             try:
                 res = self.http.post(url, json=payload, headers=headers)
             except httpx.TimeoutException:
@@ -146,6 +148,8 @@ class LLMClient:
         headers = {"Authorization": f"Bearer {self.settings.openrouter_api_key}", "X-Title": "Steelman"}
         url = f"{self.settings.openrouter_base_url}/chat/completions"
         got_text = False
+        finished = False  # the provider said the reply is complete ([DONE] or a finish_reason)
+        self.requests_sent += 1
         try:
             with self.http.stream("POST", url, json=payload, headers=headers) as res:
                 if res.status_code != 200:
@@ -158,12 +162,18 @@ class LLMClient:
                         continue  # blank lines and ": keep-alive" comments
                     data = line[len("data: ") :]
                     if data.strip() == "[DONE]":
+                        finished = True
                         break
-                    chunk = json.loads(data)
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError as e:
+                        raise LLMError("the stream contained a malformed event") from e
                     if "error" in chunk:
                         raise LLMError(f"provider error: {str(chunk['error'])[:300]}")
                     choices = chunk.get("choices") or []
                     delta = (choices[0].get("delta") or {}).get("content") if choices else None
+                    if choices and choices[0].get("finish_reason"):
+                        finished = True
                     if delta:
                         got_text = True
                         yield delta
@@ -173,6 +183,8 @@ class LLMClient:
             raise LLMError(f"network error: {e}") from e
         if not got_text:
             raise LLMError("model returned an empty message")
+        if not finished:  # the connection closed mid-reply: don't pass half a sentence off as a whole turn
+            raise LLMError("the reply was cut off")
 
     def structured(
         self,

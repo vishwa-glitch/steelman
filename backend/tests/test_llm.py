@@ -190,3 +190,33 @@ def test_chat_stream_error_event_and_empty_stream_raise():
     client, _, _ = make_client([sse("data: [DONE]")])
     with pytest.raises(LLMError, match="empty"):
         list(client.chat_stream(MSGS, "opp"))
+
+
+def test_chat_stream_that_ends_without_finishing_is_an_error():
+    client, _, _ = make_client([sse('data: {"choices": [{"delta": {"content": "Half a sent"}}]}')])
+    with pytest.raises(LLMError, match="cut off"):
+        list(client.chat_stream(MSGS, "opp"))
+
+
+def test_chat_stream_finish_reason_counts_as_finished():
+    client, _, _ = make_client(
+        [
+            sse(
+                'data: {"choices": [{"delta": {"content": "Done."}}]}',
+                'data: {"choices": [{"delta": {}, "finish_reason": "stop"}]}',
+            )
+        ]
+    )
+    assert list(client.chat_stream(MSGS, "opp")) == ["Done."]
+
+
+def test_chat_stream_malformed_event_is_an_llm_error():
+    client, _, _ = make_client([sse("data: {oops")])
+    with pytest.raises(LLMError, match="malformed"):
+        list(client.chat_stream(MSGS, "opp"))
+
+
+def test_requests_sent_counts_retries_and_repairs():
+    client, _, _ = make_client([httpx.Response(502, text="x"), reply("nope"), reply('{"winner": "A", "reason": "r"}')])
+    client.structured(MSGS, "judge", Verdict)
+    assert client.requests_sent == 3

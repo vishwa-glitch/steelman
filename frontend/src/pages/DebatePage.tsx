@@ -32,15 +32,26 @@ export function DebatePage() {
       setError(null)
       let d = from
       try {
+        let waits = 0
         while (d.next?.who === 'ai' || (d.finished && !d.scorecard)) {
-          if (d.next?.who === 'ai') {
-            setStreamText('')
-            d = await streamAiTurn(id, (piece) => setStreamText((t) => (t ?? '') + piece))
+          try {
+            if (d.next?.who === 'ai') {
+              setStreamText('')
+              d = await streamAiTurn(id, (piece) => setStreamText((t) => (t ?? '') + piece))
+              setStreamText(null)
+            } else {
+              setJudging(true)
+              d = await judgeDebate(id)
+              setJudging(false)
+            }
+          } catch (e) {
+            // 409: this step is already running elsewhere (another tab, or a reload mid-reply). Don't start
+            // it again; wait and re-read the saved debate until it shows up.
+            if (!(e instanceof ApiError && e.status === 409) || waits >= 40) throw e
+            waits += 1
             setStreamText(null)
-          } else {
-            setJudging(true)
-            d = await judgeDebate(id)
-            setJudging(false)
+            await new Promise((r) => setTimeout(r, 3000))
+            d = await getDebate(id)
           }
           setDebate(d)
         }

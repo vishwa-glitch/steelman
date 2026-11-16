@@ -25,4 +25,13 @@ describe('highlight', () => {
     const segs = highlight(TEXT, ['income to conserve', 'funds conservation.'])
     expect(segs.map((s) => s.text).join('')).toBe(TEXT)
   })
+
+  it('keeps positions right when a character changes length in lower case', () => {
+    const text = 'İstanbul made buses free and ridership rose.'
+    expect(highlight(text, ['ridership rose']).find((s) => s.quoted)?.text).toBe('ridership rose')
+  })
+
+  it('treats punctuation in a quote as plain text', () => {
+    expect(highlight('Is it fair (really fair) to charge?', ['(really fair)']).find((s) => s.quoted)?.text).toBe('(really fair)')
+  })
 })

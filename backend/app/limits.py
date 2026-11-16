@@ -3,10 +3,10 @@
 import datetime as dt
 import hashlib
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.db import DebateRow, UsageRow
+from app.db import UsageRow
 
 
 class LiveModeResting(Exception):
@@ -46,12 +46,41 @@ def ai_calls_today(db: Session) -> int:
     return db.execute(select(UsageRow.ai_calls).where(UsageRow.day == today())).scalar() or 0
 
 
-def check_debate_quota(db: Session, client_hash: str, per_day: int) -> None:
-    start = dt.datetime.combine(today(), dt.time.min, tzinfo=dt.UTC)
-    count = db.execute(
-        select(func.count())
-        .select_from(DebateRow)
-        .where(DebateRow.client_hash == client_hash, DebateRow.created_at >= start)
-    ).scalar()
-    if count >= per_day:
+def record_extra_calls(db: Session, n: int) -> None:
+    """Count calls that already happened (retries, a repair). Never refuses: the requests were sent."""
+    if n <= 0:
+        return
+    db.execute(
+        text(
+            "INSERT INTO usage (day, ai_calls) VALUES (:day, :n) "
+            "ON CONFLICT (day) DO UPDATE SET ai_calls = usage.ai_calls + :n"
+        ),
+        {"day": today(), "n": n},
+    )
+    db.commit()
+
+
+def claim_visitor_start(db: Session, client_hash: str, per_day: int) -> None:
+    """Count one attempt to start a debate, or raise. Atomic, so parallel requests can't all slip under the
+    limit, and it counts attempts that reach the model, not only debates created."""
+    row = db.execute(
+        text(
+            "INSERT INTO visitor_usage (day, client_hash, starts) VALUES (:day, :h, 1) "
+            "ON CONFLICT (day, client_hash) DO UPDATE SET starts = visitor_usage.starts + 1 "
+            "WHERE visitor_usage.starts + 1 <= :limit RETURNING starts"
+        ),
+        {"day": today(), "h": client_hash, "limit": per_day},
+    ).first()
+    if row is None or per_day < 1:
+        db.rollback()
         raise TooManyDebates
+    db.commit()
+
+
+def refund_visitor_start(db: Session, client_hash: str) -> None:
+    """Give the attempt back when it failed for a reason that wasn't the visitor's doing (model busy or down)."""
+    db.execute(
+        text("UPDATE visitor_usage SET starts = GREATEST(starts - 1, 0) WHERE day = :day AND client_hash = :h"),
+        {"day": today(), "h": client_hash},
+    )
+    db.commit()

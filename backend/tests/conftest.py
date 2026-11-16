@@ -37,7 +37,7 @@ def make_client(migrated_db):
 
     def build(llm, **overrides):
         with factory() as s:
-            s.execute(text("TRUNCATE debates, usage"))
+            s.execute(text("TRUNCATE debates, usage, visitor_usage"))
             s.commit()
         base = dataclasses.replace(
             load_settings(),

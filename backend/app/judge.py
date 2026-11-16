@@ -106,9 +106,9 @@ def check_quotes(card: Scorecard, transcript: Transcript) -> tuple[int, list[dic
     """Remove quotes that don't appear in that side's own text. Returns (kept count, dropped list)."""
     kept, dropped = 0, []
     for side_scores in card.sides:
-        source = transcript.text_of(side_scores.side)
+        turns = transcript.texts_of(side_scores.side)  # a quote must sit inside one turn, not span two
         for c in side_scores.scores:
-            real = [q for q in c.quotes if is_real_quote(q, source)]
+            real = [q for q in c.quotes if any(is_real_quote(q, t) for t in turns)]
             for q in c.quotes:
                 if q not in real:
                     dropped.append({"side": side_scores.side, "criterion": c.criterion, "quote": q})

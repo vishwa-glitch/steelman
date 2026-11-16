@@ -23,7 +23,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings, load_settings
@@ -43,8 +43,10 @@ from app.limits import (
     LiveModeResting,
     TooManyDebates,
     ai_calls_today,
-    check_debate_quota,
+    claim_visitor_start,
     hash_client,
+    record_extra_calls,
+    refund_visitor_start,
     spend_ai_call,
 )
 from app.llm import LLMClient, LLMError, RateLimited
@@ -125,7 +127,12 @@ def view(row: DebateRow, include_id: bool = True) -> dict:
 
 def load(db: Session, debate_id: uuid.UUID, lock: bool = False) -> DebateRow:
     q = select(DebateRow).where(DebateRow.id == debate_id)
-    row = db.execute(q.with_for_update() if lock else q).scalar_one_or_none()
+    if lock:
+        # populate_existing: re-read the row's values even if this session already holds the object.
+        # Without it a locked re-read returns the stale copy, and a check like "is there a scorecard yet?"
+        # sees the old answer.
+        q = q.with_for_update().execution_options(populate_existing=True)
+    row = db.execute(q).scalar_one_or_none()
     if row is None:
         raise HTTPException(404, "Debate not found.")
     return row
@@ -133,9 +140,11 @@ def load(db: Session, debate_id: uuid.UUID, lock: bool = False) -> DebateRow:
 
 def client_ip(request: Request, settings: Settings) -> str:
     if settings.trust_proxy:
+        # Our proxy appends the address it saw to whatever the client sent, so only the LAST entry is
+        # trustworthy; earlier entries can be typed by anyone.
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -144,6 +153,39 @@ def spend(db: Session, settings: Settings, n: int = 1) -> None:
         spend_ai_call(db, settings.daily_ai_call_limit, n)
     except LiveModeResting:
         raise HTTPException(503, RESTING) from None
+
+
+def sent(llm) -> int:
+    return getattr(llm, "requests_sent", 0)
+
+
+def settle(db: Session, llm, before: int) -> None:
+    """One call was counted up front. If the client sent more (a retry, a repair), count the rest too."""
+    record_extra_calls(db, sent(llm) - before - 1)
+
+
+AI_TURN_CLAIM_S = 120
+JUDGE_CLAIM_S = 180
+
+
+def claim(db: Session, debate_id: uuid.UUID, column: str, seconds: int, condition: str, **params) -> bool:
+    """Atomically mark work on this debate as started. False if someone else has a live claim, or the
+    debate is no longer in the state the caller saw. `column` and `condition` are fixed strings from this
+    file, never user input."""
+    row = db.execute(
+        text(
+            f"UPDATE debates SET {column} = now() WHERE id = :id AND {condition} "
+            f"AND ({column} IS NULL OR {column} < now() - make_interval(secs => :secs)) RETURNING id"
+        ),
+        {"id": debate_id, "secs": seconds, **params},
+    ).first()
+    db.commit()
+    return row is not None
+
+
+def release(db: Session, debate_id: uuid.UUID, column: str) -> None:
+    db.execute(text(f"UPDATE debates SET {column} = NULL WHERE id = :id"), {"id": debate_id})
+    db.commit()
 
 
 @router.get("/status")
@@ -164,19 +206,31 @@ def create_debate(
 ) -> dict:
     client_hash = hash_client(client_ip(request, settings), settings.ip_hash_salt)
     try:
-        check_debate_quota(db, client_hash, settings.debates_per_ip_per_day)
+        validate_motion_text(body.motion)  # free checks first: a motion blocked here costs nothing
+    except DebateError as e:
+        raise HTTPException(422, str(e)) from None
+    try:
+        claim_visitor_start(db, client_hash, settings.debates_per_ip_per_day)
     except TooManyDebates:
         raise HTTPException(429, "You've reached today's limit of new debates. Come back tomorrow.") from None
     try:
-        validate_motion_text(body.motion)  # free checks first, so a blocked motion costs no AI call
         spend(db, settings)
+    except HTTPException:
+        refund_visitor_start(db, client_hash)
+        raise
+    before = sent(llm)
+    try:
         motion = check_topic(body.motion, llm, settings.judge_backup_model)
-    except DebateError as e:
+    except DebateError as e:  # the model rejected the motion: this attempt counts against the visitor
         raise HTTPException(422, str(e)) from None
     except RateLimited:
+        refund_visitor_start(db, client_hash)
         raise HTTPException(503, BUSY) from None
     except LLMError:
+        refund_visitor_start(db, client_hash)
         raise HTTPException(502, "The topic check failed. Please try again.") from None
+    finally:
+        settle(db, llm, before)
     row = DebateRow(
         slug=secrets.token_urlsafe(16),
         motion=motion,
@@ -227,38 +281,53 @@ def ai_turn(
     if d.whose_turn() != "ai":
         raise HTTPException(409, "It is not the AI's turn.")
     turns_before = len(d.turns)
-    spend(db, settings)
-    stream = llm.chat_stream(
-        opponent_messages(d), settings.opponent_model, temperature=0.7, max_tokens=700, reasoning={"enabled": False}
-    )
+    # Claim the turn before paying for it, so a second tab, a double click or a reload can't start (and
+    # spend an AI call on) the same turn.
+    if not claim(db, debate_id, "ai_turn_started_at", AI_TURN_CLAIM_S, "json_array_length(turns) = :n", n=turns_before):
+        raise HTTPException(409, "The AI is already replying.")
     try:
-        first = next(stream)  # fail with a normal HTTP error if the model can't even start
-    except RateLimited:
-        raise HTTPException(503, BUSY) from None
-    except LLMError, StopIteration:
-        raise HTTPException(502, "The AI couldn't reply. Please try again.") from None
+        spend(db, settings)
+        stream = llm.chat_stream(
+            opponent_messages(d), settings.opponent_model, temperature=0.7, max_tokens=700, reasoning={"enabled": False}
+        )
+        try:
+            first = next(stream)  # fail with a normal HTTP error if the model can't even start
+        except RateLimited:
+            raise HTTPException(503, BUSY) from None
+        except LLMError, StopIteration:
+            raise HTTPException(502, "The AI couldn't reply. Please try again.") from None
+    except HTTPException:
+        release(db, debate_id, "ai_turn_started_at")
+        raise
 
     def events() -> Iterator[str]:
         parts = [first]
-        yield sse({"delta": first})
+        saved = False
         try:
-            for piece in stream:
-                parts.append(piece)
-                yield sse({"delta": piece})
-        except LLMError:
-            yield sse({"error": "The AI's reply was cut off. Please try again."})
-            return
-        # Save only if the debate hasn't moved on meanwhile (two tabs, or a double click).
-        with factory() as fresh:
-            locked = load(fresh, debate_id, lock=True)
-            current = to_debate(locked)
-            if len(current.turns) != turns_before or current.whose_turn() != "ai":
-                yield sse({"error": "This turn was already taken.", "debate": view(locked)})
+            yield sse({"delta": first})
+            try:
+                for piece in stream:
+                    parts.append(piece)
+                    yield sse({"delta": piece})
+            except LLMError:
+                yield sse({"error": "The AI's reply was cut off. Please try again."})
                 return
-            current.add_ai_turn("".join(parts))
-            locked.turns = [t.model_dump() for t in current.turns]
-            fresh.commit()
-            yield sse({"done": True, "debate": view(locked)})
+            with factory() as fresh:
+                locked = load(fresh, debate_id, lock=True)
+                current = to_debate(locked)
+                if len(current.turns) != turns_before or current.whose_turn() != "ai":
+                    yield sse({"error": "This turn was already taken.", "debate": view(locked)})
+                    return
+                current.add_ai_turn("".join(parts))
+                locked.turns = [t.model_dump() for t in current.turns]
+                locked.ai_turn_started_at = None
+                fresh.commit()
+                saved = True
+                yield sse({"done": True, "debate": view(locked)})
+        finally:
+            if not saved:  # cut off, or the browser went away: let the turn be retried at once
+                with factory() as cleanup:
+                    release(cleanup, debate_id, "ai_turn_started_at")
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
@@ -276,15 +345,25 @@ def judge_debate(
     d = to_debate(row)
     if not d.finished:
         raise HTTPException(409, "The debate isn't finished yet.")
-    spend(db, settings)
+    # Claim the judgment before paying for it: only one request may judge a debate at a time.
+    if not claim(db, debate_id, "judge_started_at", JUDGE_CLAIM_S, "scorecard IS NULL"):
+        raise HTTPException(409, "The judge is already deliberating.")
+    before = sent(llm)
     try:
-        res = judge(d.transcript(), llm, settings.judge_model)
-    except RateLimited:
-        raise HTTPException(503, BUSY) from None
-    except LLMError:
-        raise HTTPException(502, "The judge couldn't produce a valid scorecard. Please try again.") from None
+        spend(db, settings)
+        try:
+            res = judge(d.transcript(), llm, settings.judge_model)
+        except RateLimited:
+            raise HTTPException(503, BUSY) from None
+        except LLMError:
+            raise HTTPException(502, "The judge couldn't produce a valid scorecard. Please try again.") from None
+        finally:
+            settle(db, llm, before)
+    except HTTPException:
+        release(db, debate_id, "judge_started_at")
+        raise
     locked = load(db, debate_id, lock=True)
-    if not locked.scorecard:  # another request may have finished first; keep the first scorecard
+    if not locked.scorecard:  # belt and braces: never overwrite a scorecard that is already saved
         locked.scorecard = res.scorecard.model_dump()
         locked.judge_meta = {
             "version": res.judge_version,
@@ -292,7 +371,8 @@ def judge_debate(
             "dropped_quotes": len(res.dropped_quotes),
             "kept_quotes": res.kept_quotes,
         }
-        db.commit()
+    locked.judge_started_at = None
+    db.commit()
     return view(locked)
 
 

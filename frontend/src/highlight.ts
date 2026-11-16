@@ -6,12 +6,13 @@ export interface Segment {
 /** Split `text` into quoted and unquoted segments. A quote is matched exactly (ignoring case); quotes the
  * judge reworded slightly are simply not highlighted. Overlapping matches are merged. */
 export function highlight(text: string, quotes: string[]): Segment[] {
-  const lower = text.toLowerCase()
   const ranges: [number, number][] = []
   for (const q of quotes) {
-    const needle = q.trim().toLowerCase()
+    const needle = q.trim()
     if (needle.length < 8) continue
-    const at = lower.indexOf(needle)
+    // A case-insensitive search on the original text. Lower-casing both strings first is wrong: a few
+    // characters change length when lower-cased, which shifts every position after them.
+    const at = text.search(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'))
     if (at >= 0) ranges.push([at, at + needle.length])
   }
   ranges.sort((a, b) => a[0] - b[0])
