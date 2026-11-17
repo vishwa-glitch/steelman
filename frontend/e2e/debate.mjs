@@ -57,6 +57,9 @@ for (const [name, viewport] of [['desktop', { width: 1280, height: 900 }], ['pho
   const kept = await page.getByText("The judge's verdict").waitFor({ timeout: 10000 }).then(() => true, () => false)
   check(kept && (await page.locator('.empty').count()) === 0, `${name}: reload keeps the finished debate`)
 
+  await page.getByRole('link', { name: 'How it works', exact: true }).click()
+  check(await page.getByText('How the judge is kept honest').waitFor({ timeout: 10000 }).then(() => true, () => false), `${name}: How it works page renders`)
+  check((await page.locator('nav .nav-btn.on').innerText()) === 'How it works', `${name}: How it works is the active nav button`)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
   check(!overflow, `${name}: no horizontal scroll`)
   check(errors.length === 0, `${name}: no console errors ${errors.slice(0, 2).join(' | ')}`)

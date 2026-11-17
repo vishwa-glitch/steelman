@@ -18,18 +18,20 @@ export function Layout({ children }: { children: ReactNode }) {
     <>
       <header className="top">
         <Link to="/" className="mark" aria-label="Steelman, home">
-          <span className="logo" aria-hidden="true">
-            ◎
-          </span>
+          <svg className="logo" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="15" fill="#fff" stroke="currentColor" strokeWidth="2" />
+            <circle cx="16" cy="16" r="8.5" fill="none" stroke="#0f8a5f" strokeWidth="2.5" />
+            <circle cx="16" cy="16" r="3.2" fill="#c6f432" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
           Steelman
         </Link>
         <nav aria-label="Main">
           <NavLink to="/" end className={cls}>
             Debate
           </NavLink>
-          <Link to="/#how" className="nav-btn">
+          <NavLink to="/how" className={cls}>
             How it works
-          </Link>
+          </NavLink>
           <NavLink to="/judge" className={cls}>
             Judge report card
           </NavLink>

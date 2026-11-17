@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, createDebate, getStatus } from '../api'
-import { REPO_URL } from '../components/Layout'
 import topicBank from '../data/topics.json'
 import { forgetDebate, loadDebates, saveDebate } from '../history'
 import type { SavedDebate } from '../history'
@@ -31,12 +30,6 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [mine, setMine] = useState<SavedDebate[]>(() => loadDebates())
-  const { hash } = useLocation()
-
-  // The header's "How it works" links to /#how; scroll there whether we arrive from another page or not.
-  useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [hash])
 
   useEffect(() => {
     let cancelled = false
@@ -221,51 +214,29 @@ export function Home() {
         </section>
       )}
 
-      <section className="how" id="how" aria-labelledby="how-title">
+      <section className="how" aria-labelledby="how-title">
         <p className="eyebrow">How it works</p>
         <h2 id="how-title">Three steps, two AIs, every score explained.</h2>
         <ol className="steps">
           <li>
             <span className="step-n">01</span>
             <h3>You argue</h3>
-            <p>Pick a topic and a side. Type your turn, or speak it. Opening, rebuttal, then closing.</p>
+            <p>Pick a topic and a side. Type your turn, or speak it.</p>
           </li>
           <li>
             <span className="step-n">02</span>
             <h3>The AI argues back</h3>
-            <p>An AI opponent answers your actual points, word by word as it writes. Choose friendly or sharp.</p>
+            <p>An AI opponent answers your actual points, word by word as it writes.</p>
           </li>
           <li>
             <span className="step-n">03</span>
             <h3>A judge scores you both</h3>
-            <p>
-              A second AI scores argument, evidence, rebuttal and clarity, quoting the lines behind each score. You can
-              share the result.
-            </p>
+            <p>A second AI scores four criteria and quotes the lines behind every score.</p>
           </li>
         </ol>
-        <div className="under">
-          <h3>Under the hood</h3>
-          <ul>
-            <li>
-              <b>Two models from two companies.</b> The judge never grades writing from its own model family.
-            </li>
-            <li>
-              <b>Quotes are checked by code.</b> Any quote the judge makes up is removed before you see it.
-            </li>
-            <li>
-              <b>The judge is tested for bias.</b> Order, length and self-preference tests run on debates with known
-              answers. <Link to="/judge">See the results</Link>.
-            </li>
-            <li>
-              <b>Built with</b> React, TypeScript, Python (FastAPI), Postgres, and streaming replies.{' '}
-              <a href={REPO_URL} target="_blank" rel="noreferrer">
-                Read the code
-              </a>
-              .
-            </li>
-          </ul>
-        </div>
+        <Link to="/how" className="btn ghost">
+          See how it works in detail →
+        </Link>
       </section>
 
       <section id="recorded" className="recorded" aria-labelledby="rec-title">
