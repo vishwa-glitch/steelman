@@ -114,7 +114,7 @@ export function JudgePage() {
     <>
       <section className="hero">
         <p className="eyebrow">Judge report card</p>
-        <h1>How fair is the judge? Measured, not assumed.</h1>
+        <h1>How fair is the judge?</h1>
         <p className="lede">
           AI judges are known to favour the first speaker, the longer answer and their own model's writing. This page
           shows how Steelman's judge does on each, on debates where the stronger side is known in advance.
@@ -128,7 +128,7 @@ export function JudgePage() {
       <section className="report">
         <h2>How the test works</h2>
         <ol className="plain">
-          <li>An AI writes 40 debates on everyday motions. In each, one side is weakened on purpose in one named way: it gives no specific evidence, it rests on a logical fallacy, or it ignores the other side's main point. Both sides are kept about the same length.</li>
+          <li>An AI writes 40 debates on everyday topics. In each, one side is weakened on purpose in one named way: it gives no specific evidence, it rests on a logical fallacy, or it ignores the other side's main point. Both sides are kept about the same length.</li>
           <li>The judge scores each debate. Picking the side that was not weakened counts as correct.</li>
           <li>Each debate is judged again with the speaking order swapped. A fair judge gives the same verdict.</li>
           <li>Some debates are judged a second time unchanged, to measure how much the verdict moves by chance.</li>

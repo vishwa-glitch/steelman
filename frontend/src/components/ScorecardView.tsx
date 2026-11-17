@@ -52,7 +52,7 @@ export function ScorecardView({ scorecard, judge, userSide }: Props) {
         <p className="fineprint">
           Judged by {judge.model} (judge {judge.version}). Every quote above was checked against the transcript by
           code: {judge.kept_quotes} kept, {judge.dropped_quotes} removed because they weren't in it. Highlighted
-          text in the transcript is what the judge quoted. The AI's facts are not checked.
+          text in the debate is what the judge quoted. The AI's facts are not checked.
         </p>
       )}
     </section>

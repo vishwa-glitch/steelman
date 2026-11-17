@@ -20,7 +20,7 @@ function DebateRead({ debate, label }: { debate: DebateView; label: string }) {
       <Transcript turns={debate.turns} scorecard={debate.scorecard} />
       {debate.scorecard && <ScorecardView scorecard={debate.scorecard} judge={debate.judge} />}
       <p>
-        <Link to="/">Try a debate yourself</Link>
+        <Link to="/" className="btn primary">Try a debate yourself</Link>
       </p>
     </>
   )

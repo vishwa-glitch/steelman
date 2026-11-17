@@ -17,9 +17,16 @@ for (const [name, viewport] of [['desktop', { width: 1280, height: 900 }], ['pho
   page.on('pageerror', (e) => errors.push(String(e)))
 
   await page.goto(base)
-  await page.getByRole('button', { name: 'Start the debate' }).waitFor()
+  // topic tools: empty box, Surprise me fills it, categories change the suggestions
+  check((await page.getByLabel('Debate topic').inputValue()) === '', `${name}: topic box starts empty`)
+  check(await page.getByRole('button', { name: 'Write or pick a topic to start' }).isDisabled(), `${name}: start disabled until a topic is set`)
+  await page.getByRole('button', { name: 'Surprise me' }).click()
+  check((await page.getByLabel('Debate topic').inputValue()).length > 10, `${name}: Surprise me fills the topic`)
+  await page.getByRole('tab', { name: 'Sport' }).click()
+  check(await page.getByRole('button', { name: 'Esports should be in the Olympics.' }).isVisible(), `${name}: category shows its topics`)
+  await page.getByRole('button', { name: /Start the debate|Write or pick a topic/ }).waitFor()
   await page.screenshot({ path: `${shots}/home-${name}.png`, fullPage: true })
-  await page.getByRole('button', { name: 'Public transport should be free.' }).click()
+  await page.getByLabel('Debate topic').fill('Public transport should be free.')
   await page.getByRole('button', { name: 'Start the debate' }).click()
   await page.waitForURL(/\/debate\//)
 
@@ -34,6 +41,11 @@ for (const [name, viewport] of [['desktop', { width: 1280, height: 900 }], ['pho
   check(await page.getByText('For wins, 28 to 24. You won.').isVisible(), `${name}: verdict headline`)
   await page.screenshot({ path: `${shots}/scorecard-${name}.png`, fullPage: true })
 
+  await page.goto(base)
+  check(await page.getByRole('heading', { name: 'Your debates' }).isVisible(), `${name}: finished debate listed under Your debates`)
+  check((await page.locator('.mine .card-meta').first().innerText()).includes('you won'), `${name}: Your debates shows the result`)
+  await page.goBack()
+  await page.getByText("The judge's verdict").waitFor({ timeout: 10000 })
   const shareUrl = await page.locator('.share code').innerText()
   const shared = await (await browser.newContext({ viewport })).newPage()
   await shared.goto(shareUrl)

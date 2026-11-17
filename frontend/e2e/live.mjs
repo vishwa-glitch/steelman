@@ -17,10 +17,10 @@ const t0 = Date.now()
 const at = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`
 
 await page.goto(base)
-await page.getByRole('button', { name: 'Start the debate' }).waitFor()
+await page.getByRole('button', { name: /Start the debate|Write or pick a topic/ }).waitFor()
 await page.waitForFunction(() => !document.querySelector('button.primary')?.hasAttribute('disabled'), null, { timeout: 30000 })
 console.log(`${at()} home loaded, live mode on`)
-await page.getByRole('button', { name: 'Public transport should be free.' }).click()
+await page.getByLabel('Debate topic').fill('Public transport should be free.')
 await page.getByRole('button', { name: 'Start the debate' }).click()
 await page.waitForURL(/\/debate\//, { timeout: 60000 })
 console.log(`${at()} debate created (topic check passed)`)

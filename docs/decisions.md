@@ -236,3 +236,25 @@ I ran the five new tests against the old code: all five fail there, and all pass
   - On the first live debate, the opponent's free model (Ling) failed on the AI's opening. One call was spent and the claim was released. It worked when tried again (18 s).
   - Upstream rate limits on free models are the main live risk. The backend now falls back once to `OPPONENT_BACKUP_MODEL`: ERNIE 5.5 Flash, a different maker from the judge, with low reasoning effort because it refuses reasoning off.
   - Gemma was also rate-limited upstream when tried as the backup.
+
+## Redesign and new features (17 Nov 2026)
+
+- **Visual identity:** four directions were mocked up in `docs/design-mockups/`: A courtroom, B dark arena, C split stage and D lab instrument.
+  - You chose **D**: a light grid-paper background, ink-green text, one lime accent, code-style labels, For in green and Against in violet. It has its own identity, separate from the portfolio. Dark mode redefines the colour tokens only.
+  - The header links are now real buttons (Debate, Judge report card, Code).
+- **Copy:**
+  - The hero is plain product language: "Practise debating against an AI." "A judge you can audit" was dropped as jargon.
+  - "Motion" became **"Topic"** everywhere on screen and in the backend's error messages.
+- **Topics:**
+  - The topic box starts empty ("Write your own topic…"), and the start button stays disabled until there's a topic.
+  - **Surprise me** picks from a bank of 60 topics (`frontend/src/data/topics.json`) in six categories, with "More ideas" to rotate through them.
+  - A backend test checks that every bank topic passes the free checks, so Surprise me can never offer one the backend refuses.
+- **How it works:** a three-step section plus an "Under the hood" panel (two model makers, quote checking, bias tests, the stack, a link to the code).
+- **Your debates:** debates started in this browser are kept in localStorage (id, topic, side, result), at most 20.
+  - Every read and write is guarded, so blocked storage just hides the list.
+  - Anyone holding a debate id can continue that debate, and this list only stores ids this browser already had.
+- **Speak your turn:** uses the browser's own speech recognition (Chrome, Edge). Nothing goes to our server or the AI models. The button is hidden where speech recognition isn't supported.
+- **Checked:**
+  - Browser tests: 26 of 26 at desktop and phone width. These newly cover the empty topic box, Surprise me, categories, and Your debates showing the result.
+  - Offline: 5 of 5.
+  - Screenshots in light, dark and phone width show no horizontal scroll. They're in `docs/screenshots/v2/`.

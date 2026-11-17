@@ -1,27 +1,36 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, createDebate, getStatus } from '../api'
+import { REPO_URL } from '../components/Layout'
+import topicBank from '../data/topics.json'
+import { forgetDebate, loadDebates, saveDebate } from '../history'
+import type { SavedDebate } from '../history'
 import { SHOWCASE } from '../showcase'
 import type { Difficulty, Side } from '../types'
 
-const PRESETS = [
-  'Remote work is better for companies than office work.',
-  'Smartphones should be banned in schools.',
-  'A four-day work week should be the standard.',
-  'Public transport should be free.',
-  'Zoos should be closed.',
-]
+const BANK = topicBank as Record<string, string[]>
+const CATEGORIES = ['All', ...Object.keys(BANK)]
+const ALL_TOPICS = Object.values(BANK).flat()
+const PER_PAGE = 6
+
+function pick<T>(list: T[], not?: T): T {
+  const pool = list.length > 1 ? list.filter((x) => x !== not) : list
+  return pool[Math.floor(Math.random() * pool.length)]
+}
 
 export function Home() {
   const navigate = useNavigate()
-  const [motion, setMotion] = useState(PRESETS[0])
+  const [topic, setTopic] = useState('')
+  const [category, setCategory] = useState('All')
+  const [shuffle, setShuffle] = useState(0)
   const [side, setSide] = useState<Side>('pro')
   const [difficulty, setDifficulty] = useState<Difficulty>('sharp')
   const [live, setLive] = useState<'checking' | 'on' | 'off'>('checking')
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [mine, setMine] = useState<SavedDebate[]>(() => loadDebates())
 
   useEffect(() => {
     let cancelled = false
@@ -41,12 +50,19 @@ export function Home() {
     }
   }, [])
 
+  const suggestions = useMemo(() => {
+    const list = category === 'All' ? ALL_TOPICS : BANK[category]
+    const start = (shuffle * PER_PAGE) % list.length
+    return [...list.slice(start), ...list.slice(0, start)].slice(0, PER_PAGE)
+  }, [category, shuffle])
+
   async function start(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setStarting(true)
     try {
-      const d = await createDebate(motion, side, difficulty)
+      const d = await createDebate(topic, side, difficulty)
+      if (d.id) saveDebate({ id: d.id, topic: d.motion, side, startedAt: new Date().toISOString() })
       navigate(`/debate/${d.id}`)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
@@ -56,59 +72,99 @@ export function Home() {
     }
   }
 
+  const tooShort = topic.trim().length < 10
+
   return (
     <>
       <section className="hero">
         <p className="eyebrow">AI debate practice</p>
-        <h1>Argue your side. The AI argues the other. A judge you can audit scores you both.</h1>
+        <h1>
+          Practise debating <em>against an AI.</em>
+        </h1>
         <p className="lede">
-          Three rounds: opening, rebuttal, closing. The judge has to quote the exact lines behind every score, and
-          code checks each quote is real.
+          Pick a topic and a side. The AI argues against you for three rounds, then a separate AI judge scores you both
+          and shows the lines behind every score.
         </p>
       </section>
 
-      <section className="panel">
-        <h2>Start a debate</h2>
+      <section className="panel start" aria-labelledby="start-title">
+        <h2 id="start-title">Start a debate</h2>
         {live === 'off' && (
           <p className="notice" role="status">
             {notice ?? 'Live mode is resting.'} <a href="#recorded">Watch a recorded debate</a>
           </p>
         )}
         <form onSubmit={start}>
-          <label htmlFor="motion">Motion</label>
-          <input
-            id="motion"
-            value={motion}
-            onChange={(e) => setMotion(e.target.value)}
-            maxLength={200}
-            minLength={10}
-            required
-          />
-          <div className="chips">
-            {PRESETS.map((p) => (
-              <button type="button" key={p} className={p === motion ? 'chip on' : 'chip'} onClick={() => setMotion(p)}>
-                {p}
+          <label htmlFor="topic">Debate topic</label>
+          <div className="topic-row">
+            <input
+              id="topic"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Write your own topic, e.g. “Homework should be optional.”"
+              maxLength={200}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setTopic((t) => pick(category === 'All' ? ALL_TOPICS : BANK[category], t))}
+            >
+              Surprise me
+            </button>
+          </div>
+          <p className="hint">Write any statement people could argue for or against, or pick one below.</p>
+
+          <div className="cats" role="tablist" aria-label="Topic categories">
+            {CATEGORIES.map((c) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={c === category}
+                key={c}
+                className={c === category ? 'cat on' : 'cat'}
+                onClick={() => {
+                  setCategory(c)
+                  setShuffle(0)
+                }}
+              >
+                {c}
               </button>
             ))}
           </div>
+          <div className="chips">
+            {suggestions.map((t) => (
+              <button type="button" key={t} className={t === topic ? 'chip on' : 'chip'} onClick={() => setTopic(t)}>
+                {t}
+              </button>
+            ))}
+            <button type="button" className="chip more" onClick={() => setShuffle((s) => s + 1)}>
+              More ideas ↻
+            </button>
+          </div>
+
           <div className="choices">
             <fieldset>
               <legend>Your side</legend>
-              {(['pro', 'con'] as Side[]).map((s) => (
-                <label key={s} className={side === s ? 'radio on' : 'radio'}>
-                  <input type="radio" name="side" checked={side === s} onChange={() => setSide(s)} />
-                  {s === 'pro' ? 'For (you speak first)' : 'Against (AI speaks first)'}
-                </label>
-              ))}
+              <div className="seg">
+                {(['pro', 'con'] as Side[]).map((s) => (
+                  <label key={s} className={side === s ? 'on' : ''}>
+                    <input type="radio" name="side" checked={side === s} onChange={() => setSide(s)} />
+                    {s === 'pro' ? 'For · you open' : 'Against · AI opens'}
+                  </label>
+                ))}
+              </div>
             </fieldset>
             <fieldset>
               <legend>Opponent</legend>
-              {(['friendly', 'sharp'] as Difficulty[]).map((d) => (
-                <label key={d} className={difficulty === d ? 'radio on' : 'radio'}>
-                  <input type="radio" name="difficulty" checked={difficulty === d} onChange={() => setDifficulty(d)} />
-                  {d === 'friendly' ? 'Friendly' : 'Sharp'}
-                </label>
-              ))}
+              <div className="seg">
+                {(['friendly', 'sharp'] as Difficulty[]).map((d) => (
+                  <label key={d} className={difficulty === d ? 'on' : ''}>
+                    <input type="radio" name="difficulty" checked={difficulty === d} onChange={() => setDifficulty(d)} />
+                    {d === 'friendly' ? 'Friendly' : 'Sharp'}
+                  </label>
+                ))}
+              </div>
             </fieldset>
           </div>
           {error && (
@@ -116,21 +172,105 @@ export function Home() {
               {error}
             </p>
           )}
-          <button className="primary" disabled={live !== 'on' || starting}>
-            {starting ? 'Checking the motion…' : live === 'checking' ? 'Checking live mode…' : 'Start the debate'}
+          <button className="btn primary" disabled={live !== 'on' || starting || tooShort}>
+            {starting
+              ? 'Checking the topic…'
+              : live === 'checking'
+                ? 'Checking live mode…'
+                : tooShort
+                  ? 'Write or pick a topic to start'
+                  : 'Start the debate'}
           </button>
         </form>
       </section>
 
-      <section id="recorded" className="recorded">
-        <h2>Recorded debates</h2>
-        <p className="mute">Real debates played on this site, saved with their verdicts. These always work.</p>
-        <ul>
+      {mine.length > 0 && (
+        <section className="mine" aria-labelledby="mine-title">
+          <h2 id="mine-title">Your debates</h2>
+          <p className="mute small">Saved in this browser only.</p>
+          <ul className="cards">
+            {mine.map((d) => (
+              <li key={d.id} className="card">
+                <Link to={`/debate/${d.id}`} className="card-link">
+                  <span className="card-motion">{d.topic}</span>
+                  <span className="card-meta">
+                    You argued {d.side === 'pro' ? 'for' : 'against'} ·{' '}
+                    {d.result ? `you ${d.result} ${d.score ?? ''}` : 'unfinished'} ·{' '}
+                    {new Date(d.startedAt).toLocaleDateString()}
+                  </span>
+                </Link>
+                <button
+                  className="forget"
+                  aria-label={`Remove “${d.topic}” from this list`}
+                  onClick={() => {
+                    forgetDebate(d.id)
+                    setMine(loadDebates())
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="how" id="how" aria-labelledby="how-title">
+        <p className="eyebrow">How it works</p>
+        <h2 id="how-title">Three steps, two AIs, every score explained.</h2>
+        <ol className="steps">
+          <li>
+            <span className="step-n">01</span>
+            <h3>You argue</h3>
+            <p>Pick a topic and a side. Type your turn, or speak it. Opening, rebuttal, then closing.</p>
+          </li>
+          <li>
+            <span className="step-n">02</span>
+            <h3>The AI argues back</h3>
+            <p>An AI opponent answers your actual points, word by word as it writes. Choose friendly or sharp.</p>
+          </li>
+          <li>
+            <span className="step-n">03</span>
+            <h3>A judge scores you both</h3>
+            <p>
+              A second AI scores argument, evidence, rebuttal and clarity, quoting the lines behind each score. You can
+              share the result.
+            </p>
+          </li>
+        </ol>
+        <div className="under">
+          <h3>Under the hood</h3>
+          <ul>
+            <li>
+              <b>Two models from two companies.</b> The judge never grades writing from its own model family.
+            </li>
+            <li>
+              <b>Quotes are checked by code.</b> Any quote the judge makes up is removed before you see it.
+            </li>
+            <li>
+              <b>The judge is tested for bias.</b> Order, length and self-preference tests run on debates with known
+              answers. <Link to="/judge">See the results</Link>.
+            </li>
+            <li>
+              <b>Built with</b> React, TypeScript, Python (FastAPI), Postgres, and streaming replies.{' '}
+              <a href={REPO_URL} target="_blank" rel="noreferrer">
+                Read the code
+              </a>
+              .
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="recorded" className="recorded" aria-labelledby="rec-title">
+        <h2 id="rec-title">Recorded debates</h2>
+        <p className="mute small">Real debates played on this site, saved with their verdicts. These always work.</p>
+        <ul className="cards">
           {SHOWCASE.map(({ key, blurb, debate }) => (
-            <li key={key}>
-              <Link to={`/recorded/${key}`}>
-                <span className="motion">{debate.motion}</span>
-                <span className="mute">{blurb}</span>
+            <li key={key} className="card">
+              <Link to={`/recorded/${key}`} className="card-link">
+                <span className="card-motion">{debate.motion}</span>
+                <span className="card-meta">{blurb}</span>
               </Link>
             </li>
           ))}

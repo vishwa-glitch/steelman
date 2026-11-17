@@ -1,0 +1,100 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Steelman mockup A · Courtroom</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,800;1,600&family=Source+Serif+4:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+*{box-sizing:border-box} body{margin:0} main,.top,.foot{max-width:72rem;margin:0 auto;padding-left:1rem;padding-right:1rem}
+.top{display:flex;justify-content:space-between;align-items:center;padding-top:1.1rem;padding-bottom:1.1rem}
+.mark{display:flex;align-items:center;gap:.55rem;text-decoration:none} nav{display:flex;gap:.5rem}
+.nav-btn{text-decoration:none;white-space:nowrap} h1,h2,h3,p{margin:0} .hero{padding:3rem 0 2rem;max-width:50rem}
+.hero h1{margin:.6rem 0 1rem} .panel{padding:1.4rem;margin-bottom:2.5rem} .panel h2{margin-bottom:1rem}
+label{display:block;margin:0 0 .4rem} .motion-row{display:flex;gap:.6rem} .motion-row input{flex:1;min-width:0}
+.hint{margin:.5rem 0 1rem} .cats,.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;margin:1.2rem 0 1.4rem}
+.seg{display:flex} .seg span{flex:1;text-align:center;cursor:pointer} .btn{cursor:pointer;border:0;white-space:nowrap}
+.preview{margin-bottom:2.5rem} .round-label{margin:.8rem 0 .6rem} .pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.cell{padding:1.1rem} .cell-head{display:flex;justify-content:space-between;margin-bottom:.6rem} mark{color:inherit}
+.verdict{display:grid;grid-template-columns:1fr 1.3fr;gap:1.5rem;align-items:center;margin-top:1rem;padding:1.2rem}
+.bar-row{display:grid;grid-template-columns:4.5rem 1fr 2rem;gap:.6rem;align-items:center;margin:.35rem 0}
+.bar{height:10px;overflow:hidden} .bar i{display:block;height:100%} .recorded h2{margin-bottom:1rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:.8rem;margin-bottom:3rem}
+.card{display:flex;flex-direction:column;gap:.3rem;padding:1.1rem;text-decoration:none} .foot{padding-top:1.2rem;padding-bottom:2.5rem}
+@media(max-width:720px){.pair,.verdict{grid-template-columns:1fr}.motion-row{flex-direction:column} nav .nav-btn:first-child{display:none}}
+
+body{background:#f6f1e7;color:#211a17;font:400 1.02rem/1.6 'Source Serif 4',Georgia,serif}
+.top{border-bottom:3px double #211a17} .mark{font:800 1.4rem 'Playfair Display';color:#211a17;letter-spacing:.02em}
+.logo{display:grid;place-items:center;width:2rem;height:2rem;background:#7b1e2b;color:#f6f1e7;border-radius:50%;font-size:1.1rem}
+.nav-btn{font:600 .9rem 'Source Serif 4';color:#211a17;border:1.5px solid #211a17;padding:.45rem 1rem;border-radius:2px}
+.nav-btn.on{background:#211a17;color:#f6f1e7}
+.eyebrow{font:500 .72rem 'JetBrains Mono';letter-spacing:.14em;text-transform:uppercase;color:#7b1e2b}
+h1{font:800 clamp(2rem,5vw,3.4rem)/1.08 'Playfair Display'} h1 em{color:#7b1e2b;font-style:italic;font-weight:600}
+h2{font:800 1.6rem 'Playfair Display'} h3{font:800 1.5rem 'Playfair Display'} .lede{font-size:1.15rem;color:#5a4f47}
+.panel{background:#fffdf8;border:1px solid #d9cfbf;box-shadow:6px 6px 0 #211a17}
+label{font:500 .72rem 'JetBrains Mono';letter-spacing:.1em;text-transform:uppercase;color:#5a4f47}
+input{font:inherit;padding:.75rem .9rem;border:1.5px solid #211a17;background:#fff;border-radius:2px}
+.hint{color:#7a6e63;font-style:italic} .cat{font:500 .75rem 'JetBrains Mono';text-transform:uppercase;letter-spacing:.08em;padding:.3rem .6rem;color:#5a4f47}
+.cat.on{color:#7b1e2b;border-bottom:2px solid #7b1e2b} .chip{border:1px solid #cdbfa9;padding:.35rem .8rem;font-size:.9rem;border-radius:2px;background:#fff}
+.chip.on{border-color:#7b1e2b;color:#7b1e2b} .seg{border:1.5px solid #211a17} .seg span{padding:.6rem}.seg span.on{background:#211a17;color:#f6f1e7}
+.btn.primary{background:#7b1e2b;color:#fff;font:600 1.05rem 'Source Serif 4';padding:.85rem 1.6rem;border-radius:2px;box-shadow:4px 4px 0 #211a17}
+.btn.ghost{background:transparent;border:1.5px solid #211a17;padding:.7rem 1rem;font:600 .95rem 'Source Serif 4';color:#211a17}
+.round-label{font:800 1.2rem 'Playfair Display';font-style:italic;border-bottom:1px solid #d9cfbf;padding-bottom:.4rem}
+.cell{background:#fffdf8;border:1px solid #d9cfbf} .cell.pro{border-top:4px solid #1f3a5f}.cell.con{border-top:4px solid #7b1e2b}
+.tag{font:500 .72rem 'JetBrains Mono';letter-spacing:.12em;text-transform:uppercase}.who{color:#7a6e63;font-size:.9rem}
+mark{background:#efd9a7} .verdict{background:#211a17;color:#f6f1e7} .verdict .eyebrow{color:#e9b8a0}
+.bar{background:#4a3f39}.bar i{background:#efd9a7}.bar.con i{background:#c97a7a} .card{background:#fffdf8;border:1px solid #d9cfbf;color:#211a17}
+.card-motion{font:800 1.15rem 'Playfair Display'}.card-meta{color:#7a6e63;font-size:.9rem} .foot{border-top:3px double #211a17;color:#7a6e63;font-size:.88rem}
+</style></head><body>
+<header class="top">
+  <a class="mark" href="#"><span class="logo">§</span>Steelman</a>
+  <nav><a class="nav-btn on" href="#">Debate</a><a class="nav-btn" href="#">Judge report card</a></nav>
+</header>
+<main>
+  <section class="hero">
+    <p class="eyebrow">AI debate practice</p>
+    <h1>Argue your side. The AI argues the other. <em>A judge you can audit</em> scores you both.</h1>
+    <p class="lede">Three rounds: opening, rebuttal, closing. Every score comes with the exact lines behind it, and code checks each quote is real.</p>
+  </section>
+
+  <section class="panel start">
+    <h2>Start a debate</h2>
+    <label>Your motion</label>
+    <div class="motion-row">
+      <input value="Smartphones should be banned in schools." aria-label="Motion">
+      <button class="btn ghost">Surprise me</button>
+    </div>
+    <p class="hint">Type any motion, or pick one below.</p>
+    <div class="cats"><span class="cat on">All</span><span class="cat">Tech</span><span class="cat">Education</span><span class="cat">Cities</span><span class="cat">Work</span><span class="cat">Culture</span><span class="cat">Sport</span></div>
+    <div class="chips"><span class="chip on">Smartphones should be banned in schools.</span><span class="chip">A four-day work week should be the standard.</span><span class="chip">Public transport should be free.</span><span class="chip">Zoos should be closed.</span></div>
+    <div class="choices">
+      <div><label>Your side</label><div class="seg"><span class="on">For · you open</span><span>Against · AI opens</span></div></div>
+      <div><label>Opponent</label><div class="seg"><span>Friendly</span><span class="on">Sharp</span></div></div>
+    </div>
+    <button class="btn primary">Start the debate</button>
+  </section>
+
+  <section class="preview">
+    <p class="eyebrow">What a debate looks like</p>
+    <div class="round-label">Rebuttal</div>
+    <div class="pair">
+      <article class="cell pro"><div class="cell-head"><span class="tag">For</span><span class="who">You</span></div>
+        <p>My opponent says phones help in emergencies, but <mark>schools already have phones in every office</mark>. Locking devices in pouches during lessons keeps that safety net while removing the distraction.</p></article>
+      <article class="cell con"><div class="cell-head"><span class="tag">Against</span><span class="who">AI · sharp</span></div>
+        <p>A ban teaches avoidance, not judgement. <mark>Students will meet phones in every job they ever have</mark>; school is where they should learn to put one down on purpose.</p></article>
+    </div>
+    <div class="verdict">
+      <div><p class="eyebrow">The judge's verdict</p><h3>For wins, 31 to 26.</h3></div>
+      <div class="bars">
+        <div class="bar-row"><span>For</span><div class="bar"><i style="width:77%"></i></div><b>31</b></div>
+        <div class="bar-row"><span>Against</span><div class="bar con"><i style="width:65%"></i></div><b>26</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="recorded">
+    <h2>Recorded debates</h2>
+    <div class="cards">
+      <a class="card" href="#"><span class="card-motion">Museums should be free to enter.</span><span class="card-meta">For wins 32–23 · friendly AI</span></a>
+      <a class="card" href="#"><span class="card-motion">Public transport should be free.</span><span class="card-meta">Against wins 31–21 · sharp AI</span></a>
+    </div>
+  </section>
+</main>
+<footer class="foot">Steelman is a practice tool. The AI's arguments are not fact-checked; the judge scores how well a case is argued, not whether it is true.</footer>
+</body></html>

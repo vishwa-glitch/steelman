@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError, addTurn, getDebate, judgeDebate, streamAiTurn } from '../api'
 import { ScorecardView } from '../components/ScorecardView'
 import { Transcript } from '../components/Transcript'
+import { saveDebate } from '../history'
+import { speechSupported, useSpeech } from '../speech'
 import type { DebateView } from '../types'
 
 const MIN = 20
@@ -20,6 +22,11 @@ export function DebatePage() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const appendSpoken = useCallback(
+    (text: string) => setDraft((d) => (d.trim() ? `${d.trimEnd()} ${text}` : text).slice(0, MAX)),
+    [],
+  )
+  const speech = useSpeech(appendSpoken)
   // One AI request at a time, even if an effect runs twice. Each request costs one of the day's AI calls.
   const busy = useRef(false)
 
@@ -98,6 +105,27 @@ export function DebatePage() {
     }
   }
 
+  // Keep "Your debates" in step with this debate (topic, and the result once judged).
+  useEffect(() => {
+    if (!debate?.id) return
+    const card = debate.scorecard
+    const total = (side: 'pro' | 'con') =>
+      card?.sides.find((x) => x.side === side)?.scores.reduce((n, c) => n + c.score, 0) ?? 0
+    const other = debate.user_side === 'pro' ? 'con' : 'pro'
+    saveDebate({
+      id: debate.id,
+      topic: debate.motion,
+      side: debate.user_side,
+      startedAt: new Date().toISOString(),
+      ...(card
+        ? {
+            result: card.winner === debate.user_side ? 'won' : 'lost',
+            score: `${total(debate.user_side)}–${total(other)}`,
+          }
+        : {}),
+    })
+  }, [debate])
+
   if (loadError)
     return (
       <section className="panel">
@@ -117,7 +145,7 @@ export function DebatePage() {
   return (
     <>
       <section className="debate-head">
-        <p className="eyebrow">The motion</p>
+        <p className="eyebrow">Debate topic</p>
         <h1>{debate.motion}</h1>
         <p className="mute">
           You argue {debate.user_side === 'pro' ? 'for' : 'against'}. The AI ({debate.difficulty}) argues{' '}
@@ -145,7 +173,20 @@ export function DebatePage() {
 
       {who === 'user' && next && (
         <form className="panel turn-form" onSubmit={submit}>
-          <label htmlFor="turn">Your {next.round}</label>
+          <div className="turn-head">
+            <label htmlFor="turn">Your {next.round}</label>
+            {speechSupported && (
+              <button
+                type="button"
+                className={speech.listening ? 'btn ghost mic on' : 'btn ghost mic'}
+                aria-pressed={speech.listening}
+                onClick={speech.listening ? speech.stop : speech.start}
+              >
+                <span className="mic-dot" aria-hidden="true" />
+                {speech.listening ? 'Stop speaking' : 'Speak your turn'}
+              </button>
+            )}
+          </div>
           <textarea
             id="turn"
             rows={6}
@@ -160,11 +201,17 @@ export function DebatePage() {
                   : 'Say why your side has won the main clashes.'
             }
           />
+          {speech.listening && (
+            <p className="hint" aria-live="polite">
+              Listening… {speech.interim && <i>{speech.interim}</i>}
+            </p>
+          )}
+          {speech.error && <p className="hint">{speech.error}</p>}
           <div className="turn-foot">
             <span className={draft.trim().length < MIN ? 'mute' : 'mute ok'}>
               {draft.trim().length} / {MAX} characters (minimum {MIN})
             </span>
-            <button className="primary" disabled={sending || draft.trim().length < MIN}>
+            <button className="btn primary" disabled={sending || draft.trim().length < MIN}>
               {sending ? 'Sending…' : 'Submit turn'}
             </button>
           </div>
