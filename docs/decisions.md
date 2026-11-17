@@ -258,3 +258,9 @@ I ran the five new tests against the old code: all five fail there, and all pass
   - Browser tests: 26 of 26 at desktop and phone width. These newly cover the empty topic box, Surprise me, categories, and Your debates showing the result.
   - Offline: 5 of 5.
   - Screenshots in light, dark and phone width show no horizontal scroll. They're in `docs/screenshots/v2/`.
+
+### Follow-up changes (17 Nov 2026)
+
+- **No dark mode.** Dark mode had been redefining the colours whenever the system theme was dark. On a Mac in dark mode, that showed a dark green site instead of the white grid design you picked. The site is now light only (`color-scheme: light`). Checked with a browser emulating system dark mode: the background stays `rgb(244, 246, 243)`.
+- **Header:** larger, squarer buttons: Debate, How it works (scrolls to the section from any page), Judge report card, and **GitHub** with the GitHub mark. The repo is now public.
+- **Headline:** back to "Argue your side. The AI argues the other. A judge you can audit scores you both." "Practise debating against an AI" read like a single ChatGPT feature. The original's three beats show the scope: you argue, an AI opponent, and a judge.

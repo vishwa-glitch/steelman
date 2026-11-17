@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError, createDebate, getStatus } from '../api'
 import { REPO_URL } from '../components/Layout'
 import topicBank from '../data/topics.json'
@@ -31,6 +31,12 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [mine, setMine] = useState<SavedDebate[]>(() => loadDebates())
+  const { hash } = useLocation()
+
+  // The header's "How it works" links to /#how; scroll there whether we arrive from another page or not.
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [hash])
 
   useEffect(() => {
     let cancelled = false
@@ -79,11 +85,11 @@ export function Home() {
       <section className="hero">
         <p className="eyebrow">AI debate practice</p>
         <h1>
-          Practise debating <em>against an AI.</em>
+          Argue your side. The AI argues the other. <em>A judge you can audit</em> scores you both.
         </h1>
         <p className="lede">
-          Pick a topic and a side. The AI argues against you for three rounds, then a separate AI judge scores you both
-          and shows the lines behind every score.
+          Three rounds: opening, rebuttal, closing. Then a separate AI judge scores both sides and quotes the exact lines
+          behind every score, so you can check its reasoning.
         </p>
       </section>
 
