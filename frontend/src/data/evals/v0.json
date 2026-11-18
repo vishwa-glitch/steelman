@@ -3,17 +3,17 @@
     "judge": "v0",
     "judge_model": "nvidia/nemotron-3.5-super-vl:free",
     "writer_model": "inclusionai/ling-3.2-flash:free",
-    "debates": 23,
+    "debates": 40,
     "subset": 15,
     "planned_debates": 40,
     "complete": false,
     "stopped": "BudgetExhausted: used 35 of today's allowance of 35",
-    "updated": "2026-11-17T01:27+00:00"
+    "updated": "2026-11-18T08:51+00:00"
   },
   "summary": {
     "progress": {
-      "original": "23/23",
-      "swapped": "23/23",
+      "original": "36/40",
+      "swapped": "23/40",
       "rerun": "1/15",
       "padded_weak": "1/15",
       "selfpref_strong": "1/15",
@@ -29,8 +29,8 @@
     },
     "valid_output": {
       "original": {
-        "n": 23,
-        "valid": 23,
+        "n": 36,
+        "valid": 36,
         "rate": 1
       },
       "swapped": {
@@ -61,8 +61,8 @@
     },
     "accuracy": {
       "original": {
-        "n": 23,
-        "correct": 23,
+        "n": 36,
+        "correct": 36,
         "rate": 1
       },
       "swapped": {
@@ -116,9 +116,9 @@
       "accuracy_weak_reworded": 1
     },
     "quotes": {
-      "kept": 845,
-      "dropped": 2,
-      "drop_rate": 0.002
+      "kept": 1079,
+      "dropped": 3,
+      "drop_rate": 0.003
     }
   }
 }
